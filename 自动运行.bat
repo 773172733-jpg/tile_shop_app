@@ -1,0 +1,9 @@
+@echo off
+chcp 65001 >nul
+cd /d E:\tile_shop_app
+echo 正在启动 Flutter 到 Chrome...
+echo 等待约 30 秒...
+start "" "D:\flutter\bin\flutter.bat" run -d chrome --web-port=8000
+timeout /t 3 /nobreak >nul
+start chrome http://localhost:8000
+echo 已打开浏览器，请稍等...
