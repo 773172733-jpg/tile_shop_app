@@ -20,70 +20,161 @@ class MyApp extends StatelessWidget {
 }
 
 // 分类数据模型
-class Category {
+class TileCategory {
   final String id;
   final String name;
   final String icon;
   final String color;
-  final int size; // 1=小，2=中，3=大
+  final TileSize size; // 磁贴大小
 
-  Category({
+  TileCategory({
     required this.id,
     required this.name,
     required this.icon,
     required this.color,
-    this.size = 2,
+    this.size = TileSize.medium,
   });
 }
 
-// 首页 - Windows Phone 风格磁贴
+// 磁贴大小枚举
+enum TileSize {
+  small,    // 小方块 (1x1)
+  medium,   // 中方块 (1x2)
+  wide,     // 宽方块 (2x1)
+  large,    // 大方块 (2x2)
+}
+
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.title});
 
   final String title;
 
-  // 分类列表
-  static List<Category> getCategories() {
+  // 分类列表 - Windows Phone 风格布局
+  List<TileCategory> getCategories() {
     return [
-      Category(id: '1', name: '瓷砖', icon: '🏠', color: '#2196F3', size: 3),
-      Category(id: '2', name: '岩板', icon: '🪨', color: '#9C27B0', size: 2),
-      Category(id: '3', name: '仿古砖', icon: '🏺', color: '#795548', size: 2),
-      Category(id: '4', name: '木纹砖', icon: '🪵', color: '#8D6E63', size: 2),
-      Category(id: '5', name: '花片', icon: '🌸', color: '#E91E63', size: 1),
-      Category(id: '6', name: '辅材', icon: '🔧', color: '#607D8B', size: 1),
-      Category(id: '7', name: '新品', icon: '✨', color: '#FF5722', size: 1),
-      Category(id: '8', name: '促销', icon: '💰', color: '#F44336', size: 1),
+      // 第一行：两个大磁贴
+      TileCategory(id: '1', name: '瓷砖', icon: '🏠', color: '#2196F3', size: TileSize.large),
+      TileCategory(id: '2', name: '岩板', icon: '🪨', color: '#9C27B0', size: TileSize.large),
+      // 第二行：一个宽磁贴 + 两个小磁贴
+      TileCategory(id: '3', name: '仿古砖', icon: '🏺', color: '#795548', size: TileSize.wide),
+      TileCategory(id: '5', name: '花片', icon: '🌸', color: '#E91E63', size: TileSize.small),
+      TileCategory(id: '6', name: '辅材', icon: '🔧', color: '#607D8B', size: TileSize.small),
+      // 第三行：两个中方块
+      TileCategory(id: '4', name: '木纹砖', icon: '🪵', color: '#8D6E63', size: TileSize.medium),
+      TileCategory(id: '7', name: '新品', icon: '✨', color: '#FF5722', size: TileSize.medium),
+      // 第四行：促销大磁贴
+      TileCategory(id: '8', name: '促销特惠', icon: '💰', color: '#F44336', size: TileSize.large),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final categories = HomePage.getCategories();
+    final categories = getCategories();
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
       body: Container(
-        color: Colors.black,
-        padding: const EdgeInsets.all(12),
-        child: GridView.count(
-          crossAxisCount: 4, // 4 列网格
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          children: categories.map((category) {
-            return _buildTile(context, category);
-          }).toList(),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.shade900,
+              Colors.blue.shade700,
+              Colors.blue.shade500,
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            children: _buildTileRows(categories),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTile(BuildContext context, Category category) {
-    // 根据 size 决定占用的行列数
-    int rowSpan = category.size;
-    int colSpan = category.size;
+  List<Widget> _buildTileRows(List<TileCategory> categories) {
+    List<Widget> rows = [];
+    int index = 0;
 
+    // 第一行：2 个大磁贴
+    if (index < categories.length) {
+      final cat1 = categories[index];
+      final cat2 = categories[index + 1];
+      rows.add(const SizedBox(height: 12));
+      rows.add(Row(
+        children: [
+          Expanded(child: _buildTile(cat1, isLarge: true)),
+          const SizedBox(width: 12),
+          Expanded(child: _buildTile(cat2, isLarge: true)),
+        ],
+      ));
+      index += 2;
+    }
+
+    // 第二行：宽磁贴 + 两个小磁贴
+    if (index < categories.length) {
+      final cat1 = categories[index];
+      final cat2 = categories[index + 1];
+      final cat3 = categories[index + 2];
+      rows.add(const SizedBox(height: 12));
+      rows.add(Row(
+        children: [
+          Expanded(flex: 2, child: _buildTile(cat1, isWide: true)),
+          const SizedBox(width: 12),
+          Expanded(child: _buildTile(cat2, isSmall: true)),
+          const SizedBox(width: 12),
+          Expanded(child: _buildTile(cat3, isSmall: true)),
+        ],
+      ));
+      index += 3;
+    }
+
+    // 第三行：两个中方块
+    if (index < categories.length) {
+      final cat1 = categories[index];
+      final cat2 = categories[index + 1];
+      rows.add(const SizedBox(height: 12));
+      rows.add(Row(
+        children: [
+          Expanded(child: _buildTile(cat1, isMedium: true)),
+          const SizedBox(width: 12),
+          Expanded(child: _buildTile(cat2, isMedium: true)),
+        ],
+      ));
+      index += 2;
+    }
+
+    // 第四行：大磁贴
+    if (index < categories.length) {
+      final cat = categories[index];
+      rows.add(const SizedBox(height: 12));
+      rows.add(Row(
+        children: [
+          Expanded(child: _buildTile(cat, isLarge: true)),
+        ],
+      ));
+      index += 1;
+    }
+
+    rows.add(const SizedBox(height: 24));
+    return rows;
+  }
+
+  Widget _buildTile(TileCategory category, {
+    bool isSmall = false,
+    bool isMedium = false,
+    bool isWide = false,
+    bool isLarge = false,
+  }) {
     Color tileColor;
     try {
       tileColor = HexColor.fromHex(category.color);
@@ -91,52 +182,65 @@ class HomePage extends StatelessWidget {
       tileColor = Colors.blue;
     }
 
-    return GestureDetector(
-      onTap: () {
-        // 跳转到产品列表页
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductListPage(
-              categoryName: category.name,
-              categoryId: category.id,
+    double aspectRatio = 1.0;
+    if (isSmall) aspectRatio = 1.0;
+    if (isMedium) aspectRatio = 2.0;
+    if (isWide) aspectRatio = 2.0;
+    if (isLarge) aspectRatio = 2.0;
+
+    return Builder(
+      builder: (BuildContext context) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductListPage(
+                  categoryName: category.name,
+                  categoryId: category.id,
+                ),
+              ),
+            );
+          },
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: Container(
+              decoration: BoxDecoration(
+                color: tileColor,
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Stack(
+                children: [
+                  // 图标在左上角
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Text(
+                      category.icon,
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                  ),
+                  // 名称在左下角
+                  Positioned(
+                    bottom: 12,
+                    left: 12,
+                    right: 12,
+                    child: Text(
+                      category.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: tileColor,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Stack(
-          children: [
-            // 图标
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Text(
-                category.icon,
-                style: const TextStyle(fontSize: 32),
-              ),
-            ),
-            // 名称
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Text(
-                category.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -156,13 +260,12 @@ class ProductListPage extends StatefulWidget {
   State<ProductListPage> createState() => _ProductListPageState();
 }
 
-// 瓷砖数据模型
 class TileProduct {
   final String id;
-  final String name;      // 型号名称
-  final String spec;      // 规格（如 800x800）
-  final double price;     // 价格
-  final String? imageUrl; // 图片 URL
+  final String name;
+  final String spec;
+  final double price;
+  final String? imageUrl;
 
   TileProduct({
     required this.id,
@@ -174,9 +277,8 @@ class TileProduct {
 }
 
 class _ProductListPageState extends State<ProductListPage> {
-  // 模拟不同分类的产品数据
   Map<String, List<TileProduct>> productsByCategory = {
-    '1': [ // 瓷砖
+    '1': [
       TileProduct(id: '1', name: '爵士白', spec: '800×800mm', price: 168.0),
       TileProduct(id: '2', name: '鱼骨纹', spec: '600×1200mm', price: 198.0),
       TileProduct(id: '3', name: '卡拉拉白', spec: '800×800mm', price: 156.0),
@@ -187,40 +289,40 @@ class _ProductListPageState extends State<ProductListPage> {
       TileProduct(id: '8', name: '土耳其灰', spec: '750×1500mm', price: 238.0),
       TileProduct(id: '9', name: '雪山银狐', spec: '800×800mm', price: 208.0),
     ],
-    '2': [ // 岩板
+    '2': [
       TileProduct(id: '1', name: '雪花白', spec: '1200×2400mm', price: 568.0),
       TileProduct(id: '2', name: '鱼肚金', spec: '1200×2400mm', price: 598.0),
       TileProduct(id: '3', name: '劳伦黑金', spec: '1200×2400mm', price: 628.0),
       TileProduct(id: '4', name: '亚马逊绿', spec: '1200×2400mm', price: 688.0),
     ],
-    '3': [ // 仿古砖
+    '3': [
       TileProduct(id: '1', name: '复古灰', spec: '600×600mm', price: 88.0),
       TileProduct(id: '2', name: '田园米黄', spec: '600×600mm', price: 92.0),
       TileProduct(id: '3', name: '欧式咖色', spec: '600×600mm', price: 98.0),
       TileProduct(id: '4', name: '美式乡村', spec: '500×500mm', price: 78.0),
     ],
-    '4': [ // 木纹砖
+    '4': [
       TileProduct(id: '1', name: '北美胡桃', spec: '150×800mm', price: 128.0),
       TileProduct(id: '2', name: '欧洲橡木', spec: '150×800mm', price: 136.0),
       TileProduct(id: '3', name: '亚洲柚木', spec: '200×1000mm', price: 158.0),
       TileProduct(id: '4', name: '非洲花梨', spec: '200×1000mm', price: 168.0),
     ],
-    '5': [ // 花片
+    '5': [
       TileProduct(id: '1', name: '樱花', spec: '300×300mm', price: 28.0),
       TileProduct(id: '2', name: '牡丹', spec: '300×300mm', price: 32.0),
       TileProduct(id: '3', name: '荷花', spec: '300×300mm', price: 30.0),
     ],
-    '6': [ // 辅材
+    '6': [
       TileProduct(id: '1', name: '美缝剂', spec: '支', price: 45.0),
       TileProduct(id: '2', name: '瓷砖胶', spec: '袋', price: 68.0),
       TileProduct(id: '3', name: '找平器', spec: '个', price: 2.5),
       TileProduct(id: '4', name: '十字卡', spec: '包', price: 15.0),
     ],
-    '7': [ // 新品
+    '7': [
       TileProduct(id: '1', name: '星空灰', spec: '800×800mm', price: 258.0),
       TileProduct(id: '2', name: '流光金', spec: '800×800mm', price: 288.0),
     ],
-    '8': [ // 促销
+    '8': [
       TileProduct(id: '1', name: '清仓款 A', spec: '600×600mm', price: 39.0),
       TileProduct(id: '2', name: '清仓款 B', spec: '600×600mm', price: 45.0),
       TileProduct(id: '3', name: '特价款 C', spec: '800×800mm', price: 88.0),
@@ -252,7 +354,6 @@ class _ProductListPageState extends State<ProductListPage> {
       ),
       body: Column(
         children: [
-          // 顶部提示
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -269,7 +370,6 @@ class _ProductListPageState extends State<ProductListPage> {
               ],
             ),
           ),
-          // 9 宫格网格
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(8),
@@ -300,7 +400,6 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  // 构建单个瓷砖卡片
   Widget _buildTileCard(TileProduct tile) {
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -309,13 +408,10 @@ class _ProductListPageState extends State<ProductListPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 产品图片区域
           Expanded(
             flex: 3,
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-              ),
+              decoration: BoxDecoration(color: Colors.grey.shade200),
               child: tile.imageUrl != null
                   ? Image.network(
                       tile.imageUrl!,
@@ -327,7 +423,6 @@ class _ProductListPageState extends State<ProductListPage> {
                   : _buildDefaultImage(),
             ),
           ),
-          // 产品信息区域
           Expanded(
             flex: 2,
             child: Container(
@@ -375,22 +470,14 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  // 默认图片（占位图）
   Widget _buildDefaultImage() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-      ),
-      child: Icon(
-        Icons.image,
-        size: 48,
-        color: Colors.grey.shade500,
-      ),
+      decoration: BoxDecoration(color: Colors.grey.shade300),
+      child: const Icon(Icons.image, size: 48, color: Colors.grey),
     );
   }
 }
 
-// 颜色扩展
 extension HexColor on Color {
   static Color fromHex(String hexString) {
     final buffer = StringBuffer();
