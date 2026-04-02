@@ -191,11 +191,189 @@ class ProductListPage extends StatelessWidget {
                       ],
                     ),
                   ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailPage(
+                            categoryName: categoryName,
+                            productName: '${categoryName} ${index + 1}',
+                            price: (index + 1) * 80,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      color: Colors.blue.shade50,
+                      child: const Text(
+                        '查看详情',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.blue, fontSize: 12),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class ProductDetailPage extends StatelessWidget {
+  final String categoryName;
+  final String productName;
+  final int price;
+
+  const ProductDetailPage({
+    super.key,
+    required this.categoryName,
+    required this.productName,
+    required this.price,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(productName),
+        backgroundColor: Colors.blue.shade700,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 产品图片区域
+            Container(
+              width: double.infinity,
+              height: 300,
+              color: Colors.grey.shade300,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.image, size: 80, color: Colors.grey.shade500),
+                    const SizedBox(height: 16),
+                    Text(
+                      productName,
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 产品信息
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    productName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '¥$price',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const Divider(height: 32),
+                  _buildInfoRow('分类', categoryName),
+                  _buildInfoRow('规格', '800×800mm'),
+                  _buildInfoRow('材质', '陶瓷'),
+                  _buildInfoRow('产地', '广东佛山'),
+                  _buildInfoRow('库存', '有货'),
+                  const Divider(height: 32),
+                  const Text(
+                    '产品描述',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '这款${productName}采用优质陶瓷材料，经过高温烧制而成。表面光滑细腻，质地坚硬耐用，适合用于客厅、卧室、厨房等空间的地面和墙面装饰。',
+                    style: const TextStyle(height: 1.6),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已添加到购物车')),
+                  );
+                },
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text('加入购物车'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('立即购买')),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('立即购买'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
       ),
     );
   }
