@@ -5,8 +5,8 @@
             "name": "Flutter Web",
             "type": "dart",
             "request": "launch",
-            "args": ["-d", "web-server", "--web-port=8000", "--web-launch-url", "http://localhost:8000"],
-            "preLaunchTask": "kill-port-8000"
+            "args": ["-d", "web-server", "--web-port=8000"],
+            "preLaunchTask": "kill-port"
         }
     ]
 }
