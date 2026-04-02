@@ -12,12 +12,55 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: '瓷砖店铺',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: const HomePage(),
     );
   }
+}
+
+// 购物车数据模型
+class CartItem {
+  final String categoryName;
+  final String productName;
+  final int price;
+  int quantity;
+
+  CartItem({
+    required this.categoryName,
+    required this.productName,
+    required this.price,
+    this.quantity = 1,
+  });
+}
+
+// 全局购物车
+class Cart {
+  static final Cart _instance = Cart._internal();
+  factory Cart() => _instance;
+  Cart._internal();
+
+  final List<CartItem> _items = [];
+  List<CartItem> get items => _items;
+
+  int get totalCount => _items.fold(0, (sum, item) => sum + item.quantity);
+  int get totalPrice => _items.fold(0, (sum, item) => sum + item.price * item.quantity);
+
+  void add(CartItem item) {
+    final existingIndex = _items.indexWhere((i) => i.productName == item.productName);
+    if (existingIndex >= 0) {
+      _items[existingIndex].quantity++;
+    } else {
+      _items.add(item);
+    }
+  }
+
+  void remove(int index) {
+    if (index >= 0 && index < _items.length) {
+      _items.removeAt(index);
+    }
+  }
+
+  void clear() => _items.clear();
 }
 
 class HomePage extends StatelessWidget {
@@ -29,6 +72,36 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('瓷砖店铺'),
         backgroundColor: Colors.blue.shade700,
+        actions: [
+          IconButton(
+            icon: Stack(
+              children: [
+                const Icon(Icons.shopping_cart),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${Cart().totalCount}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CartPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Container(
         color: Colors.blue.shade50,
@@ -45,7 +118,12 @@ class HomePage extends StatelessWidget {
             _buildCategoryTile(context, '马赛克', Icons.apps, Colors.red),
             _buildCategoryTile(context, '大理石瓷砖', Icons.photo, Colors.teal),
             _buildCategoryTile(context, '木纹砖', Icons.table_rows, Colors.brown),
-            _buildCategoryTile(context, '水泥砖', Icons.blur_circular, Colors.grey),
+            _buildCategoryTile(
+              context,
+              '水泥砖',
+              Icons.blur_circular,
+              Colors.grey,
+            ),
             _buildCategoryTile(context, '花片', Icons.star, Colors.pink),
           ],
         ),
@@ -53,7 +131,12 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildCategoryTile(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildCategoryTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -61,7 +144,9 @@ class HomePage extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title)),
+            MaterialPageRoute(
+              builder: (_) => ProductListPage(categoryName: title),
+            ),
           );
         },
         child: Container(
@@ -120,7 +205,9 @@ class ProductListPage extends StatelessWidget {
           itemBuilder: (_, index) {
             return Card(
               elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -129,13 +216,19 @@ class ProductListPage extends StatelessWidget {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade300,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(8),
+                        ),
                       ),
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.image, size: 50, color: Colors.grey.shade500),
+                            Icon(
+                              Icons.image,
+                              size: 50,
+                              color: Colors.grey.shade500,
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               '${categoryName} ${index + 1}',
@@ -179,10 +272,22 @@ class ProductListPage extends StatelessWidget {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.add_shopping_cart, color: Colors.blue),
+                              icon: const Icon(
+                                Icons.add_shopping_cart,
+                                color: Colors.blue,
+                              ),
                               onPressed: () {
+                                Cart().add(CartItem(
+                                  categoryName: categoryName,
+                                  productName: '${categoryName} ${index + 1}',
+                                  price: (index + 1) * 80,
+                                ));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('已添加${categoryName} ${index + 1}到购物车')),
+                                  SnackBar(
+                                    content: Text(
+                                      '已添加${categoryName} ${index + 1}到购物车',
+                                    ),
+                                  ),
                                 );
                               },
                             ),
@@ -301,10 +406,7 @@ class ProductDetailPage extends StatelessWidget {
                   const Divider(height: 32),
                   const Text(
                     '产品描述',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -324,9 +426,9 @@ class ProductDetailPage extends StatelessWidget {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已添加到购物车')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('已添加到购物车')));
                 },
                 icon: const Icon(Icons.add_shopping_cart),
                 label: const Text('加入购物车'),
@@ -341,9 +443,9 @@ class ProductDetailPage extends StatelessWidget {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('立即购买')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('立即购买')));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
@@ -367,14 +469,151 @@ class ProductDetailPage extends StatelessWidget {
         children: [
           SizedBox(
             width: 80,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
+            child: Text(label, style: TextStyle(color: Colors.grey.shade600)),
           ),
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+}
+
+// 购物车页面
+class CartPage extends StatefulWidget {
+  const CartPage({super.key});
+
+  @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  final Cart _cart = Cart();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('购物车'),
+        backgroundColor: Colors.blue.shade700,
+        actions: [
+          if (_cart.items.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () {
+                setState(() => _cart.clear());
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('购物车已清空')),
+                );
+              },
+            ),
+        ],
+      ),
+      body: _cart.items.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('购物车是空的', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _cart.items.length,
+                    itemBuilder: (_, index) {
+                      final item = _cart.items[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: Container(
+                            width: 60,
+                            height: 60,
+                            color: Colors.grey.shade300,
+                            child: const Icon(Icons.image, color: Colors.grey),
+                          ),
+                          title: Text(item.productName),
+                          subtitle: Text('¥${item.price} × ${item.quantity}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline),
+                                onPressed: () {
+                                  setState(() {
+                                    if (item.quantity > 1) {
+                                      item.quantity--;
+                                    } else {
+                                      _cart.remove(index);
+                                    }
+                                  });
+                                },
+                              ),
+                              Text('${item.quantity}'),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: () {
+                                  setState(() => item.quantity++);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () {
+                                  setState(() => _cart.remove(index));
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (_cart.items.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('共${_cart.totalCount}件商品', style: TextStyle(color: Colors.grey.shade600)),
+                            Text('合计：¥${_cart.totalPrice}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+                          ],
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('订单功能开发中...')),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                          ),
+                          child: const Text('去结算'),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
