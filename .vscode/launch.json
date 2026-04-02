@@ -5,8 +5,7 @@
             "name": "Flutter Web",
             "type": "dart",
             "request": "launch",
-            "args": ["-d", "chrome", "--web-port=8000"],
-            "chromeExecutable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+            "args": ["-d", "web-server", "--web-port=8000"]
         }
     ]
 }
