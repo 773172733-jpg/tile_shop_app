@@ -18,7 +18,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// 购物车数据模型
 class CartItem {
   final String categoryName;
   final String productName;
@@ -33,7 +32,6 @@ class CartItem {
   });
 }
 
-// 全局购物车
 class Cart {
   static final Cart _instance = Cart._internal();
   factory Cart() => _instance;
@@ -47,9 +45,7 @@ class Cart {
       _items.fold(0, (sum, item) => sum + item.price * item.quantity);
 
   void add(CartItem item) {
-    final existingIndex = _items.indexWhere(
-      (i) => i.productName == item.productName,
-    );
+    final existingIndex = _items.indexWhere((i) => i.productName == item.productName);
     if (existingIndex >= 0) {
       _items[existingIndex].quantity++;
     } else {
@@ -58,9 +54,7 @@ class Cart {
   }
 
   void remove(int index) {
-    if (index >= 0 && index < _items.length) {
-      _items.removeAt(index);
-    }
+    if (index >= 0 && index < _items.length) _items.removeAt(index);
   }
 
   void clear() => _items.clear();
@@ -71,6 +65,10 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final smallTileHeight = (screenWidth - 60) / 4;
+    final mediumTileHeight = smallTileHeight * 1.3;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -80,204 +78,133 @@ class HomePage extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 第一行：1 个大方块 (占 2 列)
-            _buildRow1(context),
-            // 第二行：4 个小方块
-            _buildRow2(context),
-            // 第三行：1 个宽方块 + 2 个小方块
-            _buildRow3(context),
-            // 第四行：3 个中方块
-            _buildRow4(context),
+            _buildRow1(context, screenWidth),
+            _buildRow2(context, smallTileHeight),
+            _buildRow3(context, screenWidth),
+            _buildRow4(context, mediumTileHeight),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
-        },
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
         backgroundColor: Colors.red,
-        icon: const Stack(
-          children: [
-            Icon(Icons.shopping_cart, color: Colors.white),
-            Positioned(
-              right: 0,
-              top: -8,
-              child: CircleAvatar(
-                radius: 10,
-                backgroundColor: Colors.white,
-                child: Text('', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
+        icon: const Icon(Icons.shopping_cart, color: Colors.white),
         label: Text('${Cart().totalCount}件', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildRow1(BuildContext context) {
+  Widget _buildRow1(BuildContext context, double screenWidth) {
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       child: Row(
         children: [
           Expanded(
             flex: 2,
-            child: _buildTile(
-              context,
-              '抛光砖',
-              Icons.square,
-              Colors.blue,
-              height: 160,
-              iconSize: 60,
-              fontSize: 20,
-            ),
+            child: _buildLargeTile(context, '抛光砖', Icons.square, Colors.blue, screenWidth * 0.45),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             flex: 1,
-            child: _buildTile(
-              context,
-              '釉面砖',
-              Icons.layers,
-              Colors.green,
-              height: 160,
-              iconSize: 40,
-              fontSize: 14,
-            ),
+            child: _buildLargeTile(context, '釉面砖', Icons.layers, Colors.green, screenWidth * 0.45),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRow2(BuildContext context) {
+  Widget _buildRow2(BuildContext context, double tileHeight) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          Expanded(child: _buildSmallTile(context, '通体砖', Icons.grid_on, Colors.orange)),
-          const SizedBox(width: 8),
-          Expanded(child: _buildSmallTile(context, '玻化砖', Icons.blur_on, Colors.purple)),
-          const SizedBox(width: 8),
-          Expanded(child: _buildSmallTile(context, '马赛克', Icons.apps, Colors.red)),
-          const SizedBox(width: 8),
-          Expanded(child: _buildSmallTile(context, '大理石', Icons.photo, Colors.teal)),
+          Expanded(child: _buildTile(context, '通体砖', Icons.grid_on, Colors.orange, tileHeight)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildTile(context, '玻化砖', Icons.blur_on, Colors.purple, tileHeight)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildTile(context, '马赛克', Icons.apps, Colors.red, tileHeight)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildTile(context, '大理石', Icons.photo, Colors.teal, tileHeight)),
         ],
       ),
     );
   }
 
-  Widget _buildRow3(BuildContext context) {
+  Widget _buildRow3(BuildContext context, double screenWidth) {
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       child: Row(
         children: [
           Expanded(
             flex: 2,
-            child: _buildTile(
-              context,
-              '木纹砖',
-              Icons.table_rows,
-              Colors.brown,
-              height: 80,
-              iconSize: 32,
-              fontSize: 14,
-              isWide: true,
-            ),
+            child: _buildWideTile(context, '木纹砖', Icons.table_rows, Colors.brown, screenWidth * 0.22),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
-            child: _buildSmallTile(context, '水泥砖', Icons.blur_circular, Colors.grey),
+            child: _buildTile(context, '水泥砖', Icons.blur_circular, Colors.grey, screenWidth * 0.11),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
-            child: _buildSmallTile(context, '花片', Icons.star, Colors.pink),
+            child: _buildTile(context, '花片', Icons.star, Colors.pink, screenWidth * 0.11),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRow4(BuildContext context) {
+  Widget _buildRow4(BuildContext context, double tileHeight) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          Expanded(child: _buildMediumTile(context, '文化石', Icons.landscape, Colors.amber)),
-          const SizedBox(width: 8),
-          Expanded(child: _buildMediumTile(context, '踢脚线', Icons.crop, Colors.deepOrange)),
-          const SizedBox(width: 8),
-          Expanded(child: _buildMediumTile(context, '腰线', Icons.horizontal_rule, Colors.cyan)),
+          Expanded(child: _buildMediumTile(context, '文化石', Icons.landscape, Colors.amber, tileHeight)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildMediumTile(context, '踢脚线', Icons.crop, Colors.deepOrange, tileHeight)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildMediumTile(context, '腰线', Icons.horizontal_rule, Colors.cyan, tileHeight)),
         ],
       ),
     );
   }
 
-  Widget _buildTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color, {
-    required double height,
-    required double iconSize,
-    required double fontSize,
-    bool isWide = false,
-  }) {
+  Widget _buildLargeTile(BuildContext context, String title, IconData icon, Color color, double height) {
+    return _buildCard(
+      context,
+      title,
+      icon,
+      color,
+      height,
+      iconSize: height * 0.35,
+      fontSize: 18,
+      isLarge: true,
+    );
+  }
+
+  Widget _buildWideTile(BuildContext context, String title, IconData icon, Color color, double height) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
         child: Container(
           height: height,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: isWide
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: iconSize, color: Colors.white),
-                    const SizedBox(width: 12),
-                    Text(title, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ],
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: iconSize, color: Colors.white),
-                    const SizedBox(height: 8),
-                    Text(title, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold, color: Colors.white)),
-                  ],
+          color: color,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: height * 0.4, color: Colors.white),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSmallTile(BuildContext context, String title, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
-        child: Container(
-          height: 80,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 32, color: Colors.white),
-              const SizedBox(height: 4),
-              Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
             ],
           ),
         ),
@@ -285,42 +212,51 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildMediumTile(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildTile(BuildContext context, String title, IconData icon, Color color, double height) {
+    return _buildCard(context, title, icon, color, height, iconSize: height * 0.4, fontSize: 13);
+  }
+
+  Widget _buildMediumTile(BuildContext context, String title, IconData icon, Color color, double height) {
+    return _buildCard(context, title, icon, color, height, iconSize: height * 0.45, fontSize: 14);
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    double height, {
+    required double iconSize,
+    required double fontSize,
+    bool isLarge = false,
+  }) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
         child: Container(
-          height: 100,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          height: height,
+          color: color,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 40, color: Colors.white),
-              const SizedBox(height: 6),
-              Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+              Icon(icon, size: iconSize, color: Colors.white),
+              SizedBox(height: isLarge ? 12 : 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold, color: Colors.white),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUpdateCartBadge() {
-    return Positioned(
-      right: 4,
-      top: 4,
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-        child: Text(
-          '${Cart().totalCount}',
-          style: const TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -353,9 +289,7 @@ class ProductListPage extends StatelessWidget {
           itemBuilder: (_, index) {
             return Card(
               elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -364,22 +298,16 @@ class ProductListPage extends StatelessWidget {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade300,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(8),
-                        ),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                       ),
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.image,
-                              size: 50,
-                              color: Colors.grey.shade500,
-                            ),
+                            Icon(Icons.image, size: 50, color: Colors.grey.shade500),
                             const SizedBox(height: 8),
                             Text(
-                              '${categoryName} ${index + 1}',
+                              '$categoryName ${index + 1}',
                               style: TextStyle(color: Colors.grey.shade600),
                             ),
                           ],
@@ -393,19 +321,13 @@ class ProductListPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${categoryName}系列',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          '$categoryName 系列',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '规格：800×800mm',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                         ),
                         const SizedBox(height: 8),
                         Row(
@@ -413,31 +335,18 @@ class ProductListPage extends StatelessWidget {
                           children: [
                             Text(
                               '¥${(index + 1) * 80}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.red,
-                              ),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
                             ),
                             IconButton(
-                              icon: const Icon(
-                                Icons.add_shopping_cart,
-                                color: Colors.blue,
-                              ),
+                              icon: const Icon(Icons.add_shopping_cart, color: Colors.blue),
                               onPressed: () {
-                                Cart().add(
-                                  CartItem(
-                                    categoryName: categoryName,
-                                    productName: '${categoryName} ${index + 1}',
-                                    price: (index + 1) * 80,
-                                  ),
-                                );
+                                Cart().add(CartItem(
+                                  categoryName: categoryName,
+                                  productName: '$categoryName ${index + 1}',
+                                  price: (index + 1) * 80,
+                                ));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '已添加$categoryName ${index + 1}到购物车',
-                                    ),
-                                  ),
+                                  SnackBar(content: Text('已添加$categoryName ${index + 1}到购物车')),
                                 );
                               },
                             ),
@@ -453,7 +362,7 @@ class ProductListPage extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (_) => ProductDetailPage(
                             categoryName: categoryName,
-                            productName: '${categoryName} ${index + 1}',
+                            productName: '$categoryName ${index + 1}',
                             price: (index + 1) * 80,
                           ),
                         ),
@@ -503,7 +412,6 @@ class ProductDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 产品图片区域
             Container(
               width: double.infinity,
               height: 300,
@@ -516,36 +424,22 @@ class ProductDetailPage extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       productName,
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey.shade600,
-                      ),
+                      style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
             ),
-            // 产品信息
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    productName,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text(productName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
                     '¥$price',
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red),
                   ),
                   const Divider(height: 32),
                   _buildInfoRow('分类', categoryName),
@@ -554,13 +448,10 @@ class ProductDetailPage extends StatelessWidget {
                   _buildInfoRow('产地', '广东佛山'),
                   _buildInfoRow('库存', '有货'),
                   const Divider(height: 32),
-                  const Text(
-                    '产品描述',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('产品描述', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
-                    '这款${productName}采用优质陶瓷材料，经过高温烧制而成。表面光滑细腻，质地坚硬耐用，适合用于客厅、卧室、厨房等空间的地面和墙面装饰。',
+                    '这款$productName 采用优质陶瓷材料，经过高温烧制而成。表面光滑细腻，质地坚硬耐用，适合用于客厅、卧室、厨房等空间的地面和墙面装饰。',
                     style: const TextStyle(height: 1.6),
                   ),
                 ],
@@ -576,9 +467,8 @@ class ProductDetailPage extends StatelessWidget {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('已添加到购物车')));
+                  Cart().add(CartItem(categoryName: categoryName, productName: productName, price: price));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已添加到购物车')));
                 },
                 icon: const Icon(Icons.add_shopping_cart),
                 label: const Text('加入购物车'),
@@ -593,9 +483,7 @@ class ProductDetailPage extends StatelessWidget {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('立即购买')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('立即购买')));
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
@@ -617,10 +505,7 @@ class ProductDetailPage extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: TextStyle(color: Colors.grey.shade600)),
-          ),
+          SizedBox(width: 80, child: Text(label, style: TextStyle(color: Colors.grey.shade600))),
           Expanded(child: Text(value)),
         ],
       ),
@@ -628,7 +513,6 @@ class ProductDetailPage extends StatelessWidget {
   }
 }
 
-// 购物车页面
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
 
@@ -651,9 +535,7 @@ class _CartPageState extends State<CartPage> {
               icon: const Icon(Icons.delete_outline),
               onPressed: () {
                 setState(() => _cart.clear());
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('购物车已清空')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('购物车已清空')));
               },
             ),
         ],
@@ -663,16 +545,9 @@ class _CartPageState extends State<CartPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 80,
-                    color: Colors.grey,
-                  ),
+                  Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text(
-                    '购物车是空的',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
+                  Text('购物车是空的', style: TextStyle(fontSize: 16, color: Colors.grey)),
                 ],
               ),
             )
@@ -684,10 +559,7 @@ class _CartPageState extends State<CartPage> {
                     itemBuilder: (_, index) {
                       final item = _cart.items[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
                           leading: Container(
@@ -716,18 +588,11 @@ class _CartPageState extends State<CartPage> {
                               Text('${item.quantity}'),
                               IconButton(
                                 icon: const Icon(Icons.add_circle_outline),
-                                onPressed: () {
-                                  setState(() => item.quantity++);
-                                },
+                                onPressed: () => setState(() => item.quantity++),
                               ),
                               IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () {
-                                  setState(() => _cart.remove(index));
-                                },
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => setState(() => _cart.remove(index)),
                               ),
                             ],
                           ),
@@ -742,11 +607,7 @@ class _CartPageState extends State<CartPage> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, -2),
-                        ),
+                        BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, -2)),
                       ],
                     ),
                     child: Row(
@@ -755,33 +616,21 @@ class _CartPageState extends State<CartPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '共${_cart.totalCount}件商品',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
+                            Text('共${_cart.totalCount}件商品', style: TextStyle(color: Colors.grey.shade600)),
                             Text(
                               '合计：¥${_cart.totalPrice}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.red,
-                              ),
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red),
                             ),
                           ],
                         ),
                         ElevatedButton(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('订单功能开发中...')),
-                            );
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('订单功能开发中...')));
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                           ),
                           child: const Text('去结算'),
                         ),
