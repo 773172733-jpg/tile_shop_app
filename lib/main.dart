@@ -18,6 +18,112 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// 滚动文本组件
+class ScrollingText extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+
+  const ScrollingText({super.key, required this.text, required this.style});
+
+  @override
+  State<ScrollingText> createState() => _ScrollingTextState();
+}
+
+class _ScrollingTextState extends State<ScrollingText>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 15),
+      vsync: this,
+    )..repeat();
+    _animation = Tween<double>(begin: 1, end: -1).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Transform.translate(
+            offset: Offset(_animation.value * MediaQuery.of(context).size.width, 0),
+            child: child,
+          );
+        },
+        child: Text(
+          widget.text,
+          style: widget.style,
+          whiteSpace: WhiteSpace.nowrap,
+        ),
+      ),
+    );
+  }
+}
+
+// 红点提示组件
+class NotificationDot extends StatefulWidget {
+  final Widget child;
+
+  const NotificationDot({super.key, required this.child});
+
+  @override
+  State<NotificationDot> createState() => _NotificationDotState();
+}
+
+class _NotificationDotState extends State<NotificationDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.8, end: 1.2).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        ScaleTransition(
+          scale: _animation,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: widget.child),
+      ],
+    );
+  }
+}
+
 class CartItem {
   final String categoryName;
   final String productName;
@@ -74,9 +180,35 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('瓷砖店铺'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.white,
         elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                '优惠',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: 30,
+                child: const NotificationDot(
+                  child: ScrollingText(
+                    text: '🎉 抛光砖新品上市 8 折优惠！  🔥 釉面砖买 10 送 1！  ⚡ 马赛克限时特价！  💎 大理石瓷砖满 1000 减 200！',
+                    style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(
