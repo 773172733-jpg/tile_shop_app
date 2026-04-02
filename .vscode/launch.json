@@ -2,10 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Flutter Run Chrome",
+            "name": "Flutter Web",
             "type": "dart",
             "request": "launch",
-            "args": ["-d", "chrome", "--web-port=8000"]
+            "args": ["-d", "chrome", "--web-port=8000"],
+            "chromeExecutable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
         }
     ]
 }
