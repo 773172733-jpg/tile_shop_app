@@ -64,7 +64,7 @@ class _ScrollingTextState extends State<ScrollingText>
         child: Text(
           widget.text,
           style: widget.style,
-          whiteSpace: WhiteSpace.nowrap,
+          maxLines: 1,
         ),
       ),
     );
