@@ -387,15 +387,38 @@ class HomePage extends StatelessWidget {
     Color color,
     double height,
   ) {
-    return _buildCard(
-      context,
-      title,
-      icon,
-      color,
-      height,
-      iconSize: height * 0.35,
-      fontSize: 18,
-      isLarge: true,
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => showBrandDialog(context, title),
+        child: Container(
+          height: height,
+          color: color,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: height * 0.35, color: Colors.white),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -497,12 +520,7 @@ class HomePage extends StatelessWidget {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductListPage(categoryName: title),
-          ),
-        ),
+        onTap: () => showBrandDialog(context, title),
         child: Container(
           height: height,
           color: color,
@@ -533,16 +551,71 @@ class HomePage extends StatelessWidget {
   }
 }
 
+void showBrandDialog(BuildContext context, String categoryName) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('选择品牌', textAlign: TextAlign.center),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          buildBrandTile(context, categoryName, '诺贝尔瓷砖', Colors.blue),
+          const SizedBox(height: 12),
+          buildBrandTile(context, categoryName, 'HBI 岩板', Colors.purple),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget buildBrandTile(BuildContext context, String categoryName, String brand, Color color) {
+  return InkWell(
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProductListPage(categoryName: categoryName, brand: brand)),
+      );
+    },
+    child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            brand,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
+          ),
+          Icon(Icons.arrow_forward_ios, size: 18, color: color),
+        ],
+      ),
+    ),
+  );
+}
+
 class ProductListPage extends StatelessWidget {
   final String categoryName;
+  final String brand;
 
-  const ProductListPage({super.key, required this.categoryName});
+  const ProductListPage({super.key, required this.categoryName, this.brand = '诺贝尔瓷砖'});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(categoryName),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(categoryName, style: const TextStyle(fontSize: 14)),
+            Text(brand, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+          ],
+        ),
         backgroundColor: Colors.blue.shade700,
       ),
       body: Container(
