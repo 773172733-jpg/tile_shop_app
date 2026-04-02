@@ -139,15 +139,29 @@ class HomePage extends StatelessWidget {
   }
 
   // 大磁贴 (2x2)
-  Widget _buildLargeTile(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildLargeTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductListPage(categoryName: title),
+          ),
+        ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.7), color],
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -155,7 +169,14 @@ class HomePage extends StatelessWidget {
             children: [
               Icon(icon, size: 50, color: Colors.white),
               const SizedBox(height: 12),
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ],
           ),
         ),
@@ -164,15 +185,29 @@ class HomePage extends StatelessWidget {
   }
 
   // 中磁贴 (2x1 横向)
-  Widget _buildWideTile(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildWideTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductListPage(categoryName: title),
+          ),
+        ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.7), color],
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -181,7 +216,14 @@ class HomePage extends StatelessWidget {
               const SizedBox(width: 16),
               Icon(icon, size: 32, color: Colors.white),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ],
           ),
         ),
@@ -190,15 +232,29 @@ class HomePage extends StatelessWidget {
   }
 
   // 小磁贴 (1x1)
-  Widget _buildSmallTile(BuildContext context, String title, IconData icon, Color color) {
+  Widget _buildSmallTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductListPage(categoryName: title),
+          ),
+        ),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.7), color],
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -206,7 +262,15 @@ class HomePage extends StatelessWidget {
             children: [
               Icon(icon, size: 28, color: Colors.white),
               const SizedBox(height: 4),
-              Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -323,7 +387,7 @@ class ProductListPage extends StatelessWidget {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '已添加${categoryName} ${index + 1}到购物车',
+                                      '已添加$categoryName ${index + 1}到购物车',
                                     ),
                                   ),
                                 );
