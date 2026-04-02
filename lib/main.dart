@@ -43,10 +43,13 @@ class Cart {
   List<CartItem> get items => _items;
 
   int get totalCount => _items.fold(0, (sum, item) => sum + item.quantity);
-  int get totalPrice => _items.fold(0, (sum, item) => sum + item.price * item.quantity);
+  int get totalPrice =>
+      _items.fold(0, (sum, item) => sum + item.price * item.quantity);
 
   void add(CartItem item) {
-    final existingIndex = _items.indexWhere((i) => i.productName == item.productName);
+    final existingIndex = _items.indexWhere(
+      (i) => i.productName == item.productName,
+    );
     if (existingIndex >= 0) {
       _items[existingIndex].quantity++;
     } else {
@@ -105,72 +108,105 @@ class HomePage extends StatelessWidget {
       ),
       body: Container(
         color: Colors.blue.shade50,
-        child: GridView.count(
-          crossAxisCount: 3,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          padding: const EdgeInsets.all(15),
-          children: [
-            _buildCategoryTile(context, '抛光砖', Icons.square, Colors.blue),
-            _buildCategoryTile(context, '釉面砖', Icons.layers, Colors.green),
-            _buildCategoryTile(context, '通体砖', Icons.grid_on, Colors.orange),
-            _buildCategoryTile(context, '玻化砖', Icons.blur_on, Colors.purple),
-            _buildCategoryTile(context, '马赛克', Icons.apps, Colors.red),
-            _buildCategoryTile(context, '大理石瓷砖', Icons.photo, Colors.teal),
-            _buildCategoryTile(context, '木纹砖', Icons.table_rows, Colors.brown),
-            _buildCategoryTile(
-              context,
-              '水泥砖',
-              Icons.blur_circular,
-              Colors.grey,
-            ),
-            _buildCategoryTile(context, '花片', Icons.star, Colors.pink),
-          ],
+        padding: const EdgeInsets.all(10),
+        child: GridView.custom(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+          ),
+          childrenDelegate: SliverChildListDelegate([
+            // 第一行：2 个大磁贴 (2x2)
+            _buildLargeTile(context, '抛光砖', Icons.square, Colors.blue),
+            _buildLargeTile(context, '釉面砖', Icons.layers, Colors.green),
+            // 第二行：4 个小磁贴 (1x1)
+            _buildSmallTile(context, '通体砖', Icons.grid_on, Colors.orange),
+            _buildSmallTile(context, '玻化砖', Icons.blur_on, Colors.purple),
+            _buildSmallTile(context, '马赛克', Icons.apps, Colors.red),
+            _buildSmallTile(context, '大理石', Icons.photo, Colors.teal),
+            // 第三行：1 个中磁贴 (2x1) + 2 个小磁贴
+            _buildWideTile(context, '木纹砖', Icons.table_rows, Colors.brown),
+            _buildSmallTile(context, '水泥砖', Icons.blur_circular, Colors.grey),
+            _buildSmallTile(context, '花片', Icons.star, Colors.pink),
+            // 第四行：2 个小磁贴 + 1 个中磁贴 (2x1)
+            _buildSmallTile(context, '抛晶砖', Icons.crop_square, Colors.indigo),
+            _buildSmallTile(context, '文化石', Icons.landscape, Colors.amber),
+            _buildWideTile(context, '踢脚线', Icons.crop, Colors.deepOrange),
+          ]),
         ),
       ),
     );
   }
 
-  Widget _buildCategoryTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
+  // 大磁贴 (2x2)
+  Widget _buildLargeTile(BuildContext context, String title, IconData icon, Color color) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductListPage(categoryName: title),
-            ),
-          );
-        },
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withOpacity(0.7), color],
-            ),
-            borderRadius: BorderRadius.circular(10),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 50, color: Colors.white),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              const SizedBox(height: 12),
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 中磁贴 (2x1 横向)
+  Widget _buildWideTile(BuildContext context, String title, IconData icon, Color color) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(width: 16),
+              Icon(icon, size: 32, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 小磁贴 (1x1)
+  Widget _buildSmallTile(BuildContext context, String title, IconData icon, Color color) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.7), color]),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 28, color: Colors.white),
+              const SizedBox(height: 4),
+              Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -277,11 +313,13 @@ class ProductListPage extends StatelessWidget {
                                 color: Colors.blue,
                               ),
                               onPressed: () {
-                                Cart().add(CartItem(
-                                  categoryName: categoryName,
-                                  productName: '${categoryName} ${index + 1}',
-                                  price: (index + 1) * 80,
-                                ));
+                                Cart().add(
+                                  CartItem(
+                                    categoryName: categoryName,
+                                    productName: '${categoryName} ${index + 1}',
+                                    price: (index + 1) * 80,
+                                  ),
+                                );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -501,9 +539,9 @@ class _CartPageState extends State<CartPage> {
               icon: const Icon(Icons.delete_outline),
               onPressed: () {
                 setState(() => _cart.clear());
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('购物车已清空')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('购物车已清空')));
               },
             ),
         ],
@@ -513,9 +551,16 @@ class _CartPageState extends State<CartPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 80,
+                    color: Colors.grey,
+                  ),
                   SizedBox(height: 16),
-                  Text('购物车是空的', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  Text(
+                    '购物车是空的',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
                 ],
               ),
             )
@@ -527,7 +572,10 @@ class _CartPageState extends State<CartPage> {
                     itemBuilder: (_, index) {
                       final item = _cart.items[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
                           leading: Container(
@@ -561,7 +609,10 @@ class _CartPageState extends State<CartPage> {
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () {
                                   setState(() => _cart.remove(index));
                                 },
@@ -592,8 +643,18 @@ class _CartPageState extends State<CartPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('共${_cart.totalCount}件商品', style: TextStyle(color: Colors.grey.shade600)),
-                            Text('合计：¥${_cart.totalPrice}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+                            Text(
+                              '共${_cart.totalCount}件商品',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                            Text(
+                              '合计：¥${_cart.totalPrice}',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
                           ],
                         ),
                         ElevatedButton(
@@ -605,7 +666,10 @@ class _CartPageState extends State<CartPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 16,
+                            ),
                           ),
                           child: const Text('去结算'),
                         ),
