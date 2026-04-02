@@ -75,153 +75,126 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('瓷砖店铺'),
         backgroundColor: Colors.blue.shade700,
-        actions: [
-          IconButton(
-            icon: Stack(
-              children: [
-                const Icon(Icons.shopping_cart),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '${Cart().totalCount}',
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CartPage()),
-              );
-            },
-          ),
-        ],
+        elevation: 0,
       ),
       body: Container(
-        color: Colors.blue.shade50,
-        padding: const EdgeInsets.all(10),
+        color: Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
         child: GridView.custom(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
+            crossAxisCount: 6,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
           ),
           childrenDelegate: SliverChildListDelegate([
-            // 第一行：2 个大磁贴 (2x2)
-            _buildLargeTile(context, '抛光砖', Icons.square, Colors.blue),
-            _buildLargeTile(context, '釉面砖', Icons.layers, Colors.green),
-            // 第二行：4 个小磁贴 (1x1)
-            _buildSmallTile(context, '通体砖', Icons.grid_on, Colors.orange),
-            _buildSmallTile(context, '玻化砖', Icons.blur_on, Colors.purple),
-            _buildSmallTile(context, '马赛克', Icons.apps, Colors.red),
-            _buildSmallTile(context, '大理石', Icons.photo, Colors.teal),
-            // 第三行：1 个中磁贴 (2x1) + 2 个小磁贴
-            _buildWideTile(context, '木纹砖', Icons.table_rows, Colors.brown),
-            _buildSmallTile(context, '水泥砖', Icons.blur_circular, Colors.grey),
-            _buildSmallTile(context, '花片', Icons.star, Colors.pink),
-            // 第四行：2 个小磁贴 + 1 个中磁贴 (2x1)
-            _buildSmallTile(context, '抛晶砖', Icons.crop_square, Colors.indigo),
-            _buildSmallTile(context, '文化石', Icons.landscape, Colors.amber),
-            _buildWideTile(context, '踢脚线', Icons.crop, Colors.deepOrange),
+            // Row 1: 1 个宽磁贴 + 2 个中磁贴
+            _buildWideTile(context, '抛光砖', Icons.square, Colors.blue.shade700, rows: 2),
+            _buildMediumTile(context, '釉面砖', Icons.layers, Colors.green.shade700),
+            _buildMediumTile(context, '通体砖', Icons.grid_on, Colors.orange.shade700),
+            // Row 2: 宽磁贴继续 + 2 个中磁贴
+            _buildMediumTile(context, '玻化砖', Icons.blur_on, Colors.purple.shade700),
+            _buildMediumTile(context, '马赛克', Icons.apps, Colors.red.shade700),
+            // Row 3: 2 个小磁贴 + 1 个宽磁贴
+            _buildSmallTile(context, '大理石', Icons.photo, Colors.teal.shade700),
+            _buildSmallTile(context, '木纹砖', Icons.table_rows, Colors.brown.shade700),
+            _buildWideTile(context, '水泥砖', Icons.blur_circular, Colors.grey.shade700, rows: 1),
+            // Row 4: 小磁贴继续 + 宽磁贴继续
+            _buildSmallTile(context, '花片', Icons.star, Colors.pink.shade700),
+            _buildSmallTile(context, '抛晶砖', Icons.crop_square, Colors.indigo.shade700),
+            // Row 5: 3 个中磁贴
+            _buildMediumTile(context, '文化石', Icons.landscape, Colors.amber.shade700),
+            _buildMediumTile(context, '踢脚线', Icons.crop, Colors.deepOrange.shade700),
+            _buildMediumTile(context, '腰线', Icons.horizontal_rule, Colors.cyan.shade700),
           ]),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
+        },
+        backgroundColor: Colors.red,
+        child: Stack(
+          children: [
+            const Icon(Icons.shopping_cart, color: Colors.white),
+            if (Cart().totalCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  child: Text(
+                    '${Cart().totalCount}',
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  // 大磁贴 (2x2)
-  Widget _buildLargeTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
+  // 宽磁贴 (2x2 或 4x2)
+  Widget _buildWideTile(BuildContext context, String title, IconData icon, Color color, {required int rows}) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductListPage(categoryName: title),
-          ),
-        ),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withValues(alpha: 0.7), color],
-            ),
-            borderRadius: BorderRadius.circular(8),
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: rows == 2
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 48, color: Colors.white),
+                    const SizedBox(height: 8),
+                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 32, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  // 中磁贴 (2x2)
+  Widget _buildMediumTile(BuildContext context, String title, IconData icon, Color color) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 50, color: Colors.white),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 中磁贴 (2x1 横向)
-  Widget _buildWideTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductListPage(categoryName: title),
-          ),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withValues(alpha: 0.7), color],
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(width: 16),
-              Icon(icon, size: 32, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Icon(icon, size: 40, color: Colors.white),
+              const SizedBox(height: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -232,44 +205,31 @@ class HomePage extends StatelessWidget {
   }
 
   // 小磁贴 (1x1)
-  Widget _buildSmallTile(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildSmallTile(BuildContext context, String title, IconData icon, Color color) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductListPage(categoryName: title),
-          ),
-        ),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductListPage(categoryName: title))),
         child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [color.withValues(alpha: 0.7), color],
-            ),
-            borderRadius: BorderRadius.circular(8),
+            color: color,
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 28, color: Colors.white),
               const SizedBox(height: 4),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
