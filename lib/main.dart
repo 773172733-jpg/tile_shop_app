@@ -644,6 +644,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
+  final GlobalKey<_HomeContentState> _homeContentKey = GlobalKey();
 
   @override
   void initState() {
@@ -656,6 +657,11 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoading = false);
   }
 
+  void refreshHome() {
+    setState(() {});
+    _homeContentKey.currentState?.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -664,14 +670,20 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    return const Scaffold(
-      body: _HomeContent(),
+    // 存储 refreshHome 到 DataManager 以便其他页面调用
+    return WillPopScope(
+      onWillPop: () async {
+        return false;
+      },
+      child: Scaffold(
+        body: _HomeContent(key: _homeContentKey),
+      ),
     );
   }
 }
 
 class _HomeContent extends StatefulWidget {
-  const _HomeContent();
+  const _HomeContent({super.key});
 
   @override
   State<_HomeContent> createState() => _HomeContentState();
@@ -681,6 +693,17 @@ class _HomeContentState extends State<_HomeContent> {
   final _searchController = TextEditingController();
   List<String> _searchSuggestions = [];
   bool _showSuggestions = false;
+
+  // 用于刷新
+  int _version = 0;
+  void refresh() => setState(() => _version++);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次路由变化时刷新
+    refresh();
+  }
 
   // 预设颜色列表
   final List<Color> _tileColors = [
@@ -2359,6 +2382,10 @@ class AdminDashboardPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('管理后台'),
         backgroundColor: Colors.red.shade700,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: GridView.count(
         crossAxisCount: 2,
