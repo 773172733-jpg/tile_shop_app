@@ -2493,6 +2493,24 @@ class CategoryManagePage extends StatefulWidget {
 }
 
 class _CategoryManagePageState extends State<CategoryManagePage> {
+  // 预设颜色列表 - 与主界面保持一致
+  final List<Color> _tileColors = [
+    Colors.blue,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.red,
+    Colors.teal,
+    Colors.brown,
+    Colors.grey,
+    Colors.pink,
+    Colors.amber,
+    Colors.deepOrange,
+    Colors.cyan,
+    Colors.indigo,
+    Colors.lime,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final categories = DataManager().categories;
@@ -2526,15 +2544,19 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
   }
 
   Widget _buildCategoryCard(Category category) {
+    // 使用与主界面相同的颜色（根据 category ID 索引）
+    final tileColor = _tileColors[int.parse(category.id) % _tileColors.length];
+
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      margin: const EdgeInsets.all(8),
       child: InkWell(
         onTap: () => _showEditCategoryDialog(category),
         child: Container(
           decoration: BoxDecoration(
-            color: category.isEnabled ? category.color : Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(12),
+            color: category.isEnabled ? tileColor : Colors.grey.shade300,
+            borderRadius: BorderRadius.zero,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -2557,30 +2579,30 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: category.isEnabled ? Colors.white : Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
                     ),
-                    decoration: BoxDecoration(
-                      color: category.isEnabled
-                          ? Colors.green.withOpacity(0.3)
-                          : Colors.red.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      category.isEnabled ? '已启用' : '未启用',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: category.isEnabled ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  ],
+                ),
+                child: Text(
+                  category.isEnabled ? '已启用' : '未启用',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: category.isEnabled ? Colors.green.shade700 : Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                ),
               ),
             ],
           ),
