@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'dart:collection';
+import 'dart:typed_data';
+import 'dart:html' as html hide Image;
 
 void main() {
   runApp(const MyApp());
@@ -241,6 +246,13 @@ class DataManager {
   List<Product> get products => _products;
   List<Order> get orders => _orders;
   List<CartItem> get cartItems => _cartItems;
+
+  // 实时检查当前用户是否为管理员
+  bool get isAdminUser =>
+      _currentUser != null &&
+      (_currentUser!.isAdmin || _currentUser!.isSuperAdmin);
+  bool get isSuperUser => _currentUser != null && _currentUser!.isSuperAdmin;
+
   User? get currentUser => _currentUser;
   String? get currentUserUsername => _currentUserUsername;
 
@@ -251,7 +263,12 @@ class DataManager {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 初始化用户
+    // 清除之前的登录记录
+    await prefs.remove('currentUser');
+    _currentUser = null;
+    _currentUserUsername = null;
+
+    // 初始化用户 - 优先从 SharedPreferences 加载，如果没有则从 localStorage 备份恢复
     final usersJson = prefs.getStringList('users');
     if (usersJson != null && usersJson.isNotEmpty) {
       _users.clear();
@@ -259,17 +276,22 @@ class DataManager {
         _users.add(User.fromJson(json.decode(userStr)));
       }
     } else {
-      // 创建默认超级管理员
-      final superAdmin = User(
-        username: 'admin',
-        password: 'admin',
-        isAdmin: true,
-        isSuperAdmin: true,
-        inviteCode: 'ADMIN001',
-        permissions: ['all'],
-      );
-      _users.add(superAdmin);
-      await _saveUsers();
+      // 尝试从 localStorage 备份加载
+      await _loadUsers();
+
+      // 如果仍然没有数据，创建默认超级管理员
+      if (_users.isEmpty) {
+        final superAdmin = User(
+          username: 'admin',
+          password: 'admin',
+          isAdmin: true,
+          isSuperAdmin: true,
+          inviteCode: 'ADMIN001',
+          permissions: ['all'],
+        );
+        _users.add(superAdmin);
+        await _saveUsers();
+      }
     }
 
     // 初始化分类
@@ -284,9 +306,18 @@ class DataManager {
         if (iconCode != null) {
           // 使用预设图标列表查找匹配的 icon
           final presetIcons = [
-            Icons.square, Icons.layers, Icons.grid_on, Icons.blur_on,
-            Icons.apps, Icons.photo, Icons.table_rows, Icons.blur_circular,
-            Icons.star, Icons.landscape, Icons.crop, Icons.horizontal_rule,
+            Icons.square,
+            Icons.layers,
+            Icons.grid_on,
+            Icons.blur_on,
+            Icons.apps,
+            Icons.photo,
+            Icons.table_rows,
+            Icons.blur_circular,
+            Icons.star,
+            Icons.landscape,
+            Icons.crop,
+            Icons.horizontal_rule,
           ];
           for (final presetIcon in presetIcons) {
             if (presetIcon.codePoint == iconCode) {
@@ -295,18 +326,20 @@ class DataManager {
             }
           }
         }
-        _categories.add(Category(
-          id: catJson['id'] ?? '',
-          name: catJson['name'] ?? '',
-          icon: icon,
-          color: Color(catJson['color'] ?? Colors.blue.value),
-          isEnabled: catJson['isEnabled'] ?? true,
-        ));
+        _categories.add(
+          Category(
+            id: catJson['id'] ?? '',
+            name: catJson['name'] ?? '',
+            icon: icon,
+            color: Color(catJson['color'] ?? Colors.blue.value),
+            isEnabled: catJson['isEnabled'] ?? true,
+          ),
+        );
       }
     } else {
       // 创建预设分类
       final presetCategories = [
-        Category(id: '1', name: '抛光砖', icon: Icons.square, color: Colors.blue),
+        Category(id: '1', name: '瓷抛砖', icon: Icons.square, color: Colors.blue),
         Category(id: '2', name: '釉面砖', icon: Icons.layers, color: Colors.green),
         Category(
           id: '3',
@@ -427,10 +460,22 @@ class DataManager {
 
   Future<void> _saveUsers() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'users',
-      _users.map((u) => json.encode(u.toJson())).toList(),
-    );
+    final usersList = _users.map((u) => json.encode(u.toJson())).toList();
+    await prefs.setStringList('users', usersList);
+    // 同时保存到浏览器的 localStorage 作为备份
+    html.window.localStorage['users_backup'] = json.encode(usersList);
+  }
+
+  Future<void> _loadUsers() async {
+    // 尝试从 localStorage 加载备份数据
+    final backup = html.window.localStorage['users_backup'];
+    if (backup != null && backup.isNotEmpty) {
+      final usersList = json.decode(backup) as List;
+      _users.clear();
+      for (final userStr in usersList) {
+        _users.add(User.fromJson(json.decode(userStr)));
+      }
+    }
   }
 
   Future<void> _saveCategories() async {
@@ -474,18 +519,19 @@ class DataManager {
     }
   }
 
-  bool login(String username, String password) {
-    final user = _users.firstWhere(
-      (u) => u.username == username && u.password == password,
-      orElse: () => null as User,
-    );
-    if (user != null) {
+  Future<bool> login(String username, String password) async {
+    try {
+      final user = _users.firstWhere(
+        (u) => u.username == username && u.password == password,
+      );
       _currentUser = user;
       _currentUserUsername = username;
-      _saveCurrentUser();
+      await _saveCurrentUser();
       return true;
+    } catch (e) {
+      // 用户未找到或密码错误
+      return false;
     }
-    return false;
   }
 
   Future<bool> register(
@@ -498,20 +544,22 @@ class DataManager {
       return false;
     }
 
-    // 验证邀请码（超级管理员创建的邀请码）
-    final validCode = _users.firstWhere(
-      (u) => u.inviteCode == inviteCode && u.isAdmin,
-      orElse: () => null as User,
-    );
+    // 如果是空邀请码，允许注册（简化注册流程）
+    // 或者验证邀请码（超级管理员创建的邀请码）
+    if (inviteCode.isNotEmpty) {
+      final validCode = _users
+          .where((u) => u.inviteCode == inviteCode && u.isAdmin)
+          .firstOrNull;
 
-    if (validCode == null) {
-      return false;
+      if (validCode == null) {
+        return false;
+      }
     }
 
     final newUser = User(
       username: username,
       password: password,
-      inviteCode: inviteCode,
+      inviteCode: inviteCode.isNotEmpty ? inviteCode : null,
       permissions: ['view_products', 'add_to_cart'],
     );
     _users.add(newUser);
@@ -526,7 +574,7 @@ class DataManager {
     await prefs.remove('currentUser');
   }
 
-  void addToCart(CartItem item) {
+  void addToCart(CartItem item, {VoidCallback? onCartChanged}) {
     final existingIndex = _cartItems.indexWhere(
       (i) => i.productName == item.productName && i.brand == item.brand,
     );
@@ -536,6 +584,8 @@ class DataManager {
       _cartItems.add(item);
     }
     _saveCart();
+    // 通知 UI 刷新
+    onCartChanged?.call();
   }
 
   void removeFromCart(int index) {
@@ -665,9 +715,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     // 存储 refreshHome 到 DataManager 以便其他页面调用
@@ -675,9 +723,7 @@ class _HomePageState extends State<HomePage> {
       onWillPop: () async {
         return false;
       },
-      child: Scaffold(
-        body: _HomeContent(key: _homeContentKey),
-      ),
+      child: Scaffold(body: _HomeContent(key: _homeContentKey)),
     );
   }
 }
@@ -705,6 +751,15 @@ class _HomeContentState extends State<_HomeContent> {
     refresh();
   }
 
+  // 保存用户数据到 SharedPreferences
+  Future<void> _saveUsersToPrefs(DataManager dataManager) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'users',
+      dataManager.users.map((u) => json.encode(u.toJson())).toList(),
+    );
+  }
+
   // 预设颜色列表
   final List<Color> _tileColors = [
     Colors.blue,
@@ -727,6 +782,361 @@ class _HomeContentState extends State<_HomeContent> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // 选择登录类型对话框
+  // 选择登录类型对话框
+  void _showLoginTypeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('会员服务中心'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person, color: Colors.blue, size: 32),
+              title: const Text(
+                '会员登录',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('管理购物车、订单等'),
+              onTap: () {
+                Navigator.pop(context);
+                _showLoginDialog(context, isAdmin: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.red,
+                size: 32,
+              ),
+              title: const Text(
+                '管理员登录',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('管理分类、产品等'),
+              onTap: () {
+                Navigator.pop(context);
+                _showLoginDialog(context, isAdmin: true);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(
+                Icons.app_registration,
+                color: Colors.green,
+                size: 32,
+              ),
+              title: const Text(
+                '注册会员',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('注册新账号享受更多优惠'),
+              onTap: () {
+                Navigator.pop(context);
+                _showRegisterDialog(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.lock_reset,
+                color: Colors.orange,
+                size: 32,
+              ),
+              title: const Text(
+                '忘记密码',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('重置您的登录密码'),
+              onTap: () {
+                Navigator.pop(context);
+                _showForgotPasswordDialog(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 登录对话框
+  void _showLoginDialog(BuildContext context, {bool isAdmin = false}) {
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isAdmin ? '管理员登录' : '会员登录'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(
+                labelText: '用户名',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passwordController,
+              decoration: const InputDecoration(
+                labelText: '密码',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              onSubmitted: (_) async {
+                if (usernameController.text.isNotEmpty &&
+                    passwordController.text.isNotEmpty) {
+                  final success = await DataManager().login(
+                    usernameController.text,
+                    passwordController.text,
+                  );
+                  if (success) {
+                    Navigator.pop(context);
+                    setState(() {});
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('登录成功')));
+                  } else {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('用户名或密码错误')));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (usernameController.text.isNotEmpty &&
+                  passwordController.text.isNotEmpty) {
+                final success = await DataManager().login(
+                  usernameController.text,
+                  passwordController.text,
+                );
+                if (success) {
+                  Navigator.pop(context);
+                  setState(() {});
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('登录成功')));
+                } else {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('用户名或密码错误')));
+                }
+              }
+            },
+            child: const Text('登录'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 注册对话框
+  void _showRegisterDialog(BuildContext context) {
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final inviteCodeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('注册会员'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: usernameController,
+                decoration: const InputDecoration(
+                  labelText: '用户名',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passwordController,
+                decoration: const InputDecoration(
+                  labelText: '密码',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPasswordController,
+                decoration: const InputDecoration(
+                  labelText: '确认密码',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: inviteCodeController,
+                decoration: const InputDecoration(
+                  labelText: '邀请码（可选）',
+                  border: OutlineInputBorder(),
+                  hintText: '输入邀请码注册',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (usernameController.text.isEmpty ||
+                  passwordController.text.isEmpty) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('请填写用户名和密码')));
+                return;
+              }
+              if (passwordController.text != confirmPasswordController.text) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('两次输入的密码不一致')));
+                return;
+              }
+              final success = await DataManager().register(
+                usernameController.text,
+                passwordController.text,
+                inviteCodeController.text,
+              );
+              if (success) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('注册成功，请登录')));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('注册失败，用户名已存在或邀请码无效')),
+                );
+              }
+            },
+            child: const Text('注册'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 忘记密码对话框
+  void _showForgotPasswordDialog(BuildContext context) {
+    final usernameController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('忘记密码'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(
+                labelText: '用户名',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newPasswordController,
+              decoration: const InputDecoration(
+                labelText: '新密码',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmController,
+              decoration: const InputDecoration(
+                labelText: '确认新密码',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (usernameController.text.isEmpty ||
+                  newPasswordController.text.isEmpty) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('请填写用户名和新密码')));
+                return;
+              }
+              if (newPasswordController.text != confirmController.text) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('两次输入的密码不一致')));
+                return;
+              }
+              // 重置密码
+              final dataManager = DataManager();
+              final userIndex = dataManager.users.indexWhere(
+                (u) => u.username == usernameController.text,
+              );
+              if (userIndex != -1) {
+                final oldUser = dataManager.users[userIndex];
+                // 创建新用户对象替换旧用户（因为 User 是 final 字段）
+                final newUser = User(
+                  username: oldUser.username,
+                  password: newPasswordController.text,
+                  isAdmin: oldUser.isAdmin,
+                  isSuperAdmin: oldUser.isSuperAdmin,
+                  inviteCode: oldUser.inviteCode,
+                  permissions: oldUser.permissions,
+                );
+                dataManager.users[userIndex] = newUser;
+                // 调用私有方法 _saveUsers 需要通过反射或其他方式
+                // 这里我们直接调用 DataManager 的内部保存逻辑
+                _saveUsersToPrefs(dataManager);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('密码已重置，请重新登录')));
+              } else {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('用户名不存在')));
+              }
+            },
+            child: const Text('重置密码'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _updateSuggestions(String query) {
@@ -766,6 +1176,8 @@ class _HomeContentState extends State<_HomeContent> {
     final screenWidth = MediaQuery.of(context).size.width;
     final smallTileHeight = (screenWidth - 80) / 4;
     final mediumTileHeight = smallTileHeight * 1.3;
+    final user = DataManager().currentUser;
+    final isLoggedIn = user != null;
 
     return WillPopScope(
       onWillPop: () async {
@@ -779,7 +1191,10 @@ class _HomeContentState extends State<_HomeContent> {
           title: Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(4),
@@ -799,7 +1214,8 @@ class _HomeContentState extends State<_HomeContent> {
                   height: 30,
                   child: const NotificationDot(
                     child: ScrollingText(
-                      text: '🎉 抛光砖新品上市 8 折优惠！  🔥 釉面砖买 10 送 1！  ⚡ 马赛克限时特价！  💎 大理石瓷砖满 1000 减 200！',
+                      text:
+                          '🎉 瓷抛砖新品上市 8 折优惠！  🔥 釉面砖买 10 送 1！  ⚡ 马赛克限时特价！  💎 大理石瓷砖满 1000 减 200！',
                       style: TextStyle(
                         color: Colors.red,
                         fontSize: 16,
@@ -809,24 +1225,111 @@ class _HomeContentState extends State<_HomeContent> {
                   ),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.admin_panel_settings, color: Colors.red),
-                onPressed: () {
-                  final user = DataManager().currentUser;
-                  if (user != null && (user.isAdmin || user.isSuperAdmin)) {
+            ],
+          ),
+          actions: [
+            if (isLoggedIn)
+              // 已登录，显示用户名和退出菜单
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'logout') {
+                    _showLogoutDialog(context);
+                  } else if (value == 'admin') {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
+                      MaterialPageRoute(
+                        builder: (_) => const AdminDashboardPage(),
+                      ),
                     );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('您没有管理权限')),
+                  } else if (value == 'center') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MemberCenterPage(),
+                      ),
                     );
                   }
                 },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    enabled: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.username,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          user.isSuperAdmin
+                              ? '超级管理员'
+                              : user.isAdmin
+                              ? '管理员'
+                              : '普通会员',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'center',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.account_circle,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Text('会员中心', style: TextStyle(color: Colors.blue)),
+                      ],
+                    ),
+                  ),
+                  if (user.isAdmin || user.isSuperAdmin) ...[
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'admin',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.admin_panel_settings,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text('管理后台', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text('退出登录', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              // 未登录，显示登录按钮
+              TextButton(
+                onPressed: () => _showLoginTypeDialog(context),
+                child: const Text(
+                  '登录',
+                  style: TextStyle(color: Colors.blue, fontSize: 14),
+                ),
               ),
-            ],
-          ),
+            const SizedBox(width: 8),
+          ],
         ),
         body: Stack(
           children: [
@@ -872,10 +1375,19 @@ class _HomeContentState extends State<_HomeContent> {
                       controller: _searchController,
                       decoration: InputDecoration(
                         hintText: '搜索产品（如：1809）',
-                        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                        prefixIcon: const Icon(Icons.search, color: Colors.blue),
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 14,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.blue,
+                        ),
                         border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                       onChanged: _updateSuggestions,
                       onSubmitted: (value) {
@@ -883,7 +1395,10 @@ class _HomeContentState extends State<_HomeContent> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => SearchResultsPage(query: value, products: DataManager().products),
+                              builder: (_) => SearchResultsPage(
+                                query: value,
+                                products: DataManager().products,
+                              ),
                             ),
                           );
                         }
@@ -911,10 +1426,15 @@ class _HomeContentState extends State<_HomeContent> {
                         itemBuilder: (_, index) {
                           return ListTile(
                             dense: true,
-                            leading: const Icon(Icons.search, color: Colors.blue, size: 20),
+                            leading: const Icon(
+                              Icons.search,
+                              color: Colors.blue,
+                              size: 20,
+                            ),
                             title: Text(_searchSuggestions[index]),
                             onTap: () {
-                              _searchController.text = _searchSuggestions[index];
+                              _searchController.text =
+                                  _searchSuggestions[index];
                               setState(() => _showSuggestions = false);
                               Navigator.push(
                                 context,
@@ -935,28 +1455,64 @@ class _HomeContentState extends State<_HomeContent> {
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CartPage()),
-          ),
-          backgroundColor: Colors.red,
-          icon: const Icon(Icons.shopping_cart, color: Colors.white),
-          label: Text(
-            '${DataManager().totalCount}件',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        floatingActionButton: _buildCartButton(context),
+        endDrawer: Drawer(
+          elevation: 10,
+          child: CartDrawer(onCartChanged: () => setState(() {})),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCartButton(BuildContext context) {
+    return FloatingActionButton.extended(
+      onPressed: () => showCartDialog(context, setState),
+      backgroundColor: Colors.red,
+      icon: const Icon(Icons.shopping_cart, color: Colors.white),
+      label: Text(
+        '${DataManager().totalCount}件',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('确定要退出登录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              DataManager().logout();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => HomePage()),
+                (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('退出'),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildRow1(BuildContext context, double screenWidth) {
     final cats = DataManager().categories;
-    final pgz = cats.where((c) => c.id == '1').firstOrNull;
+    final cpz = cats.where((c) => c.id == '1').firstOrNull;
     final ymz = cats.where((c) => c.id == '2').firstOrNull;
 
     return Padding(
@@ -967,9 +1523,9 @@ class _HomeContentState extends State<_HomeContent> {
             flex: 2,
             child: _buildLargeTile(
               context,
-              pgz?.name ?? '抛光砖',
-              pgz?.icon ?? Icons.square,
-              pgz?.color ?? Colors.blue,
+              cpz?.name ?? '瓷抛砖',
+              cpz?.icon ?? Icons.square,
+              cpz?.color ?? Colors.blue,
               screenWidth * 0.45,
               '1',
             ),
@@ -1526,6 +2082,9 @@ class ProductListPage extends StatefulWidget {
 }
 
 class _ProductListPageState extends State<ProductListPage> {
+  int _version = 0;
+  void _refresh() => setState(() => _version++);
+
   @override
   Widget build(BuildContext context) {
     final products = DataManager().getProductsByCategory(widget.categoryId);
@@ -1543,6 +2102,18 @@ class _ProductListPageState extends State<ProductListPage> {
           ],
         ),
         backgroundColor: Colors.blue.shade700,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => showCartDialog(context, setState),
+        backgroundColor: Colors.red,
+        icon: const Icon(Icons.shopping_cart, color: Colors.white),
+        label: Text(
+          '${DataManager().totalCount}件',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: Container(
         color: Colors.grey.shade100,
@@ -1574,22 +2145,22 @@ class _ProductListPageState extends State<ProductListPage> {
                           top: Radius.circular(8),
                         ),
                       ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.image,
-                              size: 50,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              product.name,
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(8),
                         ),
+                        child:
+                            product.imageUrl != null &&
+                                product.imageUrl!.isNotEmpty
+                            ? Image.network(
+                                product.imageUrl!,
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    _buildProductPlaceholder(product),
+                              )
+                            : _buildProductPlaceholder(product),
                       ),
                     ),
                   ),
@@ -1599,7 +2170,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          product.brand,
+                          product.name,
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -1639,10 +2210,12 @@ class _ProductListPageState extends State<ProductListPage> {
                                     price: product.price,
                                     brand: product.brand,
                                   ),
+                                  onCartChanged: () => setState(() {}),
                                 );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('已添加${product.name}到购物车'),
+                                    content: Text('已添加'),
+                                    duration: const Duration(milliseconds: 800),
                                   ),
                                 );
                               },
@@ -1684,11 +2257,31 @@ class _ProductListPageState extends State<ProductListPage> {
       ),
     );
   }
+
+  Widget _buildProductPlaceholder(Product product) {
+    return Container(
+      color: Colors.grey.shade100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image, size: 50, color: Colors.grey.shade500),
+          const SizedBox(height: 8),
+          Text(
+            product.name,
+            style: TextStyle(color: Colors.grey.shade600),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ==================== 产品详情页 ====================
 
-class ProductDetailPage extends StatelessWidget {
+class ProductDetailPage extends StatefulWidget {
   final String categoryId;
   final String categoryName;
   final Product product;
@@ -1701,12 +2294,37 @@ class ProductDetailPage extends StatelessWidget {
   });
 
   @override
+  State<ProductDetailPage> createState() => _ProductDetailPageState();
+}
+
+class _ProductDetailPageState extends State<ProductDetailPage> {
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(product.name),
+        title: Text(widget.product.name),
         backgroundColor: Colors.blue.shade700,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       ),
+      floatingActionButton: DataManager().cartItems.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => showCartDialog(context, setState),
+              backgroundColor: Colors.red,
+              icon: const Icon(Icons.shopping_cart, color: Colors.white),
+              label: Text(
+                '${DataManager().totalCount}件',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : null,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1715,22 +2333,62 @@ class ProductDetailPage extends StatelessWidget {
               width: double.infinity,
               height: 300,
               color: Colors.grey.shade300,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image, size: 80, color: Colors.grey.shade500),
-                    const SizedBox(height: 16),
-                    Text(
-                      product.name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey.shade600,
+              child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      child: widget.product.imageUrl!.startsWith('data:image')
+                          ? Image.memory(
+                              base64Decode(widget.product.imageUrl!.split(',').last),
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : Image.network(
+                              widget.product.imageUrl!,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.image,
+                                      size: 80,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      widget.product.name,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image,
+                            size: 80,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            widget.product.name,
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
             Padding(
               padding: const EdgeInsets.all(16),
@@ -1738,7 +2396,7 @@ class ProductDetailPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product.name,
+                    widget.product.name,
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -1746,7 +2404,7 @@ class ProductDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '¥${product.price}',
+                    '¥${widget.product.price}',
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
@@ -1754,20 +2412,20 @@ class ProductDetailPage extends StatelessWidget {
                     ),
                   ),
                   const Divider(height: 32),
-                  _buildInfoRow('分类', categoryName),
-                  _buildInfoRow('品牌', product.brand),
-                  _buildInfoRow('规格', product.spec),
-                  _buildInfoRow('材质', product.material),
-                  _buildInfoRow('产地', product.origin),
-                  _buildInfoRow('库存', '${product.stock}件'),
+                  _buildInfoRow('分类', widget.categoryName),
+                  _buildInfoRow('品牌', widget.product.brand),
+                  _buildInfoRow('规格', widget.product.spec),
+                  _buildInfoRow('材质', widget.product.material),
+                  _buildInfoRow('产地', widget.product.origin),
+                  _buildInfoRow('库存', '${widget.product.stock}件'),
                   const Divider(height: 32),
                   const Text(
-                    '产品描述',
+                    '产品介绍',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '这款${product.name}采用优质陶瓷材料，经过高温烧制而成。表面光滑细腻，质地坚硬耐用，适合用于客厅、卧室、厨房等空间的地面和墙面装饰。',
+                    '${widget.product.brand}品牌推出的${widget.product.name}，采用优质陶瓷材料，经过高温烧制而成。表面光滑细腻，质地坚硬耐用，适合用于客厅、卧室、厨房等空间的地面和墙面装饰。',
                     style: const TextStyle(height: 1.6),
                   ),
                 ],
@@ -1785,16 +2443,20 @@ class ProductDetailPage extends StatelessWidget {
                 onPressed: () {
                   DataManager().addToCart(
                     CartItem(
-                      categoryId: categoryId,
-                      categoryName: categoryName,
-                      productName: product.name,
-                      price: product.price,
-                      brand: product.brand,
+                      categoryId: widget.categoryId,
+                      categoryName: widget.categoryName,
+                      productName: widget.product.name,
+                      price: widget.product.price,
+                      brand: widget.product.brand,
                     ),
+                    onCartChanged: () => setState(() {}),
                   );
                   ScaffoldMessenger.of(
                     context,
-                  ).showSnackBar(const SnackBar(content: Text('已添加到购物车')));
+                  ).showSnackBar(const SnackBar(
+                    content: Text('已添加'),
+                    duration: Duration(milliseconds: 800),
+                  ));
                 },
                 icon: const Icon(Icons.add_shopping_cart),
                 label: const Text('加入购物车'),
@@ -1811,17 +2473,15 @@ class ProductDetailPage extends StatelessWidget {
                 onPressed: () {
                   DataManager().addToCart(
                     CartItem(
-                      categoryId: categoryId,
-                      categoryName: categoryName,
-                      productName: product.name,
-                      price: product.price,
-                      brand: product.brand,
+                      categoryId: widget.categoryId,
+                      categoryName: widget.categoryName,
+                      productName: widget.product.name,
+                      price: widget.product.price,
+                      brand: widget.product.brand,
                     ),
+                    onCartChanged: () => setState(() {}),
                   );
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CartPage()),
-                  );
+                  showCartDialog(context, setState);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
@@ -1868,11 +2528,7 @@ class _CartPageState extends State<CartPage> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomePage()),
-        );
-        return false;
+        return true;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -2032,10 +2688,238 @@ class _CartPageState extends State<CartPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('订单提交成功！')));
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => HomePage()),
+    Navigator.pop(context);
+    setState(() {});
+  }
+}
+
+// ==================== 购物车侧边栏 ====================
+
+class CartDrawer extends StatefulWidget {
+  final VoidCallback? onCartChanged;
+
+  const CartDrawer({super.key, this.onCartChanged});
+
+  @override
+  State<CartDrawer> createState() => _CartDrawerState();
+}
+
+class _CartDrawerState extends State<CartDrawer> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 300,
+      color: Colors.white,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.blue.shade700,
+            child: Row(
+              children: [
+                const Text(
+                  '购物车',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Scaffold.of(context).closeEndDrawer(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: DataManager().cartItems.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 60,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          '购物车是空的',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: DataManager().cartItems.length,
+                    itemBuilder: (_, index) {
+                      final item = DataManager().cartItems[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(8),
+                          leading: Container(
+                            width: 50,
+                            height: 50,
+                            color: Colors.grey.shade300,
+                            child: const Icon(
+                              Icons.image,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          title: Text(
+                            item.productName,
+                            style: const TextStyle(fontSize: 13),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '¥${item.price} × ${item.quantity}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 18,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    if (item.quantity > 1) {
+                                      item.quantity--;
+                                    } else {
+                                      DataManager().removeFromCart(index);
+                                    }
+                                  });
+                                  widget.onCartChanged?.call();
+                                },
+                              ),
+                              Text(
+                                '${item.quantity}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  size: 18,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    item.quantity++;
+                                  });
+                                  widget.onCartChanged?.call();
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                  size: 18,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    DataManager().removeFromCart(index);
+                                  });
+                                  widget.onCartChanged?.call();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (DataManager().cartItems.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '共${DataManager().totalCount}件商品',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      Text(
+                        '合计：¥${DataManager().totalPrice}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setState(() => DataManager().clearCart());
+                            widget.onCartChanged?.call();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                          ),
+                          child: const Text('清空'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            DataManager().placeOrder();
+                            setState(() {});
+                            widget.onCartChanged?.call();
+                            Scaffold.of(context).closeEndDrawer();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('订单提交成功！')),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('去结算'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
+  }
+}
+
+// 显示购物车侧边栏的辅助函数
+void showCartDialog(BuildContext context, [StateSetter? refreshParent]) {
+  if (Scaffold.of(context).hasEndDrawer) {
+    Scaffold.of(context).openEndDrawer();
   }
 }
 
@@ -2325,11 +3209,21 @@ class _UserCenterPageState extends State<UserCenterPage> {
 
 // ==================== 设置页面 ====================
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  @override
   Widget build(BuildContext context) {
+    final user = DataManager().currentUser;
+    final isLoggedIn = user != null;
+    final isAdmin = DataManager().isAdminUser;
+    final isSuperAdmin = DataManager().isSuperUser;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('设置'),
@@ -2337,30 +3231,178 @@ class SettingsPage extends StatelessWidget {
       ),
       body: ListView(
         children: [
+          // 用户登录状态
+          ListTile(
+            leading: Icon(
+              isLoggedIn ? Icons.check_circle : Icons.cancel,
+              color: isLoggedIn ? Colors.green : Colors.grey,
+            ),
+            title: Text(isLoggedIn ? '已登录' : '未登录'),
+            subtitle: Text(
+              isLoggedIn
+                  ? (isSuperAdmin
+                        ? '超级管理员：${user.username}'
+                        : isAdmin
+                        ? '管理员：${user.username}'
+                        : '普通用户：${user.username}')
+                  : '登录后可管理购物车、订单等',
+            ),
+            trailing: isLoggedIn
+                ? ElevatedButton(
+                    onPressed: () => _showLogoutDialog(context),
+                    child: const Text('退出'),
+                  )
+                : ElevatedButton(
+                    onPressed: () => _showLoginDialog(context),
+                    child: const Text('登录'),
+                  ),
+          ),
+          const Divider(),
+          // 管理后台（仅管理员可见）
+          if (isLoggedIn)
+            ListTile(
+              leading: const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.red,
+              ),
+              title: const Text('管理后台'),
+              subtitle: const Text('分类管理、产品管理等'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                if (DataManager().isAdminUser) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminDashboardPage(),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('您没有管理权限，需要管理员账号')),
+                  );
+                }
+              },
+            ),
+          const Divider(),
           const ListTile(
             leading: Icon(Icons.info, color: Colors.blue),
             title: Text('关于'),
             subtitle: Text('版本：1.0.0'),
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.admin_panel_settings, color: Colors.red),
-            title: const Text('管理后台'),
-            subtitle: const Text('分类管理、产品管理等'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              final user = DataManager().currentUser;
-              if (user != null && (user.isAdmin || user.isSuperAdmin)) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdminDashboardPage()),
+        ],
+      ),
+    );
+  }
+
+  void _showLoginDialog(BuildContext context) {
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('管理员登录'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(
+                labelText: '用户名',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passwordController,
+              decoration: const InputDecoration(
+                labelText: '密码',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              onSubmitted: (_) async {
+                // 按回车键登录
+                if (usernameController.text.isNotEmpty &&
+                    passwordController.text.isNotEmpty) {
+                  final success = await DataManager().login(
+                    usernameController.text,
+                    passwordController.text,
+                  );
+                  if (success) {
+                    Navigator.pop(context);
+                    setState(() {}); // 刷新页面
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('登录成功')));
+                  } else {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('用户名或密码错误')));
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (usernameController.text.isNotEmpty &&
+                  passwordController.text.isNotEmpty) {
+                final success = await DataManager().login(
+                  usernameController.text,
+                  passwordController.text,
                 );
-              } else {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('您没有管理权限')));
+                if (success) {
+                  Navigator.pop(context);
+                  setState(() {});
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('登录成功')));
+                } else {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('用户名或密码错误')));
+                }
               }
             },
+            child: const Text('登录'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('确定要退出登录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              DataManager().logout();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => HomePage()),
+                (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('退出'),
           ),
         ],
       ),
@@ -2580,12 +3622,11 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: category.isEnabled ? Colors.white : Colors.grey.shade400,
+                  color: category.isEnabled
+                      ? Colors.white
+                      : Colors.grey.shade400,
                   borderRadius: BorderRadius.circular(4),
                   boxShadow: [
                     BoxShadow(
@@ -2599,7 +3640,9 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                   category.isEnabled ? '已启用' : '未启用',
                   style: TextStyle(
                     fontSize: 12,
-                    color: category.isEnabled ? Colors.green.shade700 : Colors.white,
+                    color: category.isEnabled
+                        ? Colors.green.shade700
+                        : Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -2640,6 +3683,7 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _buildIconOption(
                       Icons.square,
@@ -2712,6 +3756,79 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                       selectedIcon,
                       setDialogState,
                       () => selectedIcon = Icons.horizontal_rule,
+                    ),
+                    // 新增 12 个图标
+                    _buildIconOption(
+                      Icons.circle,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.circle,
+                    ),
+                    _buildIconOption(
+                      Icons.change_history,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.change_history,
+                    ),
+                    _buildIconOption(
+                      Icons.hexagon,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.hexagon,
+                    ),
+                    _buildIconOption(
+                      Icons.category,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.category,
+                    ),
+                    _buildIconOption(
+                      Icons.diamond,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.diamond,
+                    ),
+                    _buildIconOption(
+                      Icons.rectangle,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.rectangle,
+                    ),
+                    _buildIconOption(
+                      Icons.panorama,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.panorama,
+                    ),
+                    _buildIconOption(
+                      Icons.wallpaper,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.wallpaper,
+                    ),
+                    _buildIconOption(
+                      Icons.grid_view,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.grid_view,
+                    ),
+                    _buildIconOption(
+                      Icons.dashboard,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.dashboard,
+                    ),
+                    _buildIconOption(
+                      Icons.lightbulb,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.lightbulb,
+                    ),
+                    _buildIconOption(
+                      Icons.light_mode,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.light_mode,
                     ),
                   ],
                 ),
@@ -2922,6 +4039,7 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _buildIconOption(
                       Icons.square,
@@ -2958,6 +4076,115 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
                       selectedIcon,
                       setDialogState,
                       () => selectedIcon = Icons.photo,
+                    ),
+                    _buildIconOption(
+                      Icons.table_rows,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.table_rows,
+                    ),
+                    _buildIconOption(
+                      Icons.blur_circular,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.blur_circular,
+                    ),
+                    _buildIconOption(
+                      Icons.star,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.star,
+                    ),
+                    _buildIconOption(
+                      Icons.landscape,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.landscape,
+                    ),
+                    _buildIconOption(
+                      Icons.crop,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.crop,
+                    ),
+                    _buildIconOption(
+                      Icons.horizontal_rule,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.horizontal_rule,
+                    ),
+                    // 新增 12 个图标
+                    _buildIconOption(
+                      Icons.circle,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.circle,
+                    ),
+                    _buildIconOption(
+                      Icons.change_history,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.change_history,
+                    ),
+                    _buildIconOption(
+                      Icons.hexagon,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.hexagon,
+                    ),
+                    _buildIconOption(
+                      Icons.category,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.category,
+                    ),
+                    _buildIconOption(
+                      Icons.diamond,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.diamond,
+                    ),
+                    _buildIconOption(
+                      Icons.rectangle,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.rectangle,
+                    ),
+                    _buildIconOption(
+                      Icons.panorama,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.panorama,
+                    ),
+                    _buildIconOption(
+                      Icons.wallpaper,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.wallpaper,
+                    ),
+                    _buildIconOption(
+                      Icons.grid_view,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.grid_view,
+                    ),
+                    _buildIconOption(
+                      Icons.dashboard,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.dashboard,
+                    ),
+                    _buildIconOption(
+                      Icons.lightbulb,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.lightbulb,
+                    ),
+                    _buildIconOption(
+                      Icons.light_mode,
+                      selectedIcon,
+                      setDialogState,
+                      () => selectedIcon = Icons.light_mode,
                     ),
                   ],
                 ),
@@ -3079,13 +4306,34 @@ class ProductManagePage extends StatefulWidget {
 
 class _ProductManagePageState extends State<ProductManagePage> {
   String? _selectedCategoryId;
+  final _searchController = TextEditingController();
+  String _searchKeyword = '';
+
+  List<Product> _getFilteredProducts() {
+    if (_selectedCategoryId == null) return [];
+    var products = DataManager().getProductsByCategory(_selectedCategoryId!);
+    if (_searchKeyword.isEmpty) return products;
+    return products
+        .where(
+          (p) =>
+              p.name.toLowerCase().contains(_searchKeyword.toLowerCase()) ||
+              p.brand.toLowerCase().contains(_searchKeyword.toLowerCase()) ||
+              p.spec.toLowerCase().contains(_searchKeyword.toLowerCase()) ||
+              p.material.toLowerCase().contains(_searchKeyword.toLowerCase()),
+        )
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final categories = DataManager().categories;
-    final products = _selectedCategoryId != null
-        ? DataManager().getProductsByCategory(_selectedCategoryId!)
-        : <Product>[];
+    final products = _getFilteredProducts();
 
     return Scaffold(
       appBar: AppBar(
@@ -3100,6 +4348,7 @@ class _ProductManagePageState extends State<ProductManagePage> {
       ),
       body: Column(
         children: [
+          // 分类选择
           Container(
             padding: const EdgeInsets.all(12),
             color: Colors.grey.shade100,
@@ -3111,59 +4360,224 @@ class _ProductManagePageState extends State<ProductManagePage> {
                 return DropdownMenuItem(value: cat.id, child: Text(cat.name));
               }).toList(),
               onChanged: (value) {
-                setState(() => _selectedCategoryId = value);
+                setState(() {
+                  _selectedCategoryId = value;
+                  _searchKeyword = '';
+                  _searchController.clear();
+                });
               },
             ),
           ),
+          // 搜索栏
+          if (_selectedCategoryId != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: Colors.white,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索产品名称、品牌、规格、材质...',
+                  prefixIcon: const Icon(Icons.search, color: Colors.green),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  suffixIcon: _searchKeyword.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            setState(() {
+                              _searchKeyword = '';
+                              _searchController.clear();
+                            });
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: (value) {
+                  setState(() => _searchKeyword = value.trim());
+                },
+              ),
+            ),
+          // 产品列表
           Expanded(
             child: _selectedCategoryId == null
                 ? const Center(child: Text('请选择一个分类'))
                 : products.isEmpty
-                ? const Center(child: Text('该分类下暂无产品'))
-                : ListView.builder(
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _searchKeyword.isEmpty
+                              ? Icons.inventory_2_outlined
+                              : Icons.search_off,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchKeyword.isEmpty ? '该分类下暂无产品' : '未找到匹配的产品',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 1.1,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
                     itemCount: products.length,
                     itemBuilder: (_, index) {
                       final product = products[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        child: ListTile(
-                          leading: Container(
-                            width: 50,
-                            height: 50,
-                            color: Colors.grey.shade300,
-                            child: const Icon(Icons.image, color: Colors.grey),
-                          ),
-                          title: Text(product.name),
-                          subtitle: Text(
-                            '¥${product.price} | ${product.brand}',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit,
-                                  color: Colors.blue,
-                                ),
-                                onPressed: () =>
-                                    _showEditProductDialog(product),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () => _confirmDeleteProduct(product),
-                              ),
-                            ],
-                          ),
-                        ),
+                      final category = DataManager().categories.firstWhere(
+                        (c) => c.id == product.categoryId,
                       );
+                      return _buildProductCard(product, category);
                     },
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(Product product, Category category) {
+    return Container(
+      decoration: BoxDecoration(
+        color: category.color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: category.color.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 产品图片区域
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                    ? Image.network(
+                        product.imageUrl!,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            _buildPlaceholder(category),
+                      )
+                    : _buildPlaceholder(category),
+              ),
+            ),
+          ),
+          // 产品信息 - 中下方显示
+          Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.white.withOpacity(0.9),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: category.color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '¥${product.price}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      product.spec,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  product.brand,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          // 操作按钮
+          Container(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _showEditProductDialog(product),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: category.color,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('编辑', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                  onPressed: () => _confirmDeleteProduct(product),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(Category category) {
+    return Container(
+      color: Colors.grey.shade100,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image, size: 50, color: category.color),
+          const SizedBox(height: 8),
+          Text(
+            '暂无图片',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -3178,106 +4592,153 @@ class _ProductManagePageState extends State<ProductManagePage> {
     final materialController = TextEditingController(text: '陶瓷');
     final originController = TextEditingController(text: '广东佛山');
     String? selectedCategoryId;
+    String? selectedImageUrl;
+
+    // 选择图片
+    Future<void> pickImage() async {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        // 读取文件并转换为 Base64
+        final bytes = await image.readAsBytes();
+        final base64String = base64Encode(bytes);
+        selectedImageUrl = 'data:image/jpeg;base64,$base64String';
+        setState(() {});
+      }
+    }
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('添加产品'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(
-                  labelText: '所属分类',
-                  border: OutlineInputBorder(),
-                ),
-                items: DataManager().categories.map((cat) {
-                  return DropdownMenuItem(value: cat.id, child: Text(cat.name));
-                }).toList(),
-                onChanged: (value) => selectedCategoryId = value,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: '产品名称',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: priceController,
-                decoration: const InputDecoration(
-                  labelText: '价格',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: brandController,
-                decoration: const InputDecoration(
-                  labelText: '品牌',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: specController,
-                decoration: const InputDecoration(
-                  labelText: '规格',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: materialController,
-                decoration: const InputDecoration(
-                  labelText: '材质',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: originController,
-                decoration: const InputDecoration(
-                  labelText: '产地',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (selectedCategoryId != null &&
-                  nameController.text.isNotEmpty &&
-                  priceController.text.isNotEmpty) {
-                DataManager().addProduct(
-                  Product(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    categoryId: selectedCategoryId!,
-                    name: nameController.text,
-                    price: int.tryParse(priceController.text) ?? 0,
-                    brand: brandController.text,
-                    spec: specController.text,
-                    material: materialController.text,
-                    origin: originController.text,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('添加产品'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    labelText: '所属分类',
+                    border: OutlineInputBorder(),
                   ),
-                );
-                Navigator.pop(context);
-                setState(() {});
-              }
-            },
-            child: const Text('添加'),
+                  items: DataManager().categories.map((cat) {
+                    return DropdownMenuItem(
+                      value: cat.id,
+                      child: Text(cat.name),
+                    );
+                  }).toList(),
+                  onChanged: (value) => selectedCategoryId = value,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: '产品名称',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(
+                    labelText: '价格',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: brandController,
+                  decoration: const InputDecoration(
+                    labelText: '品牌',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: specController,
+                  decoration: const InputDecoration(
+                    labelText: '规格',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: materialController,
+                  decoration: const InputDecoration(
+                    labelText: '材质',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: originController,
+                  decoration: const InputDecoration(
+                    labelText: '产地',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 图片选择按钮
+                if (selectedImageUrl != null)
+                  Container(
+                    width: double.infinity,
+                    height: 150,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        base64Decode(selectedImageUrl!.split(',').last),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ElevatedButton.icon(
+                  onPressed: pickImage,
+                  icon: const Icon(Icons.image),
+                  label: const Text('选择产品图片'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedCategoryId != null &&
+                    nameController.text.isNotEmpty &&
+                    priceController.text.isNotEmpty) {
+                  DataManager().addProduct(
+                    Product(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      categoryId: selectedCategoryId!,
+                      name: nameController.text,
+                      price: int.tryParse(priceController.text) ?? 0,
+                      brand: brandController.text,
+                      spec: specController.text,
+                      material: materialController.text,
+                      origin: originController.text,
+                      imageUrl: selectedImageUrl,
+                    ),
+                  );
+                  Navigator.pop(context);
+                  setState(() {});
+                }
+              },
+              child: const Text('添加'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3291,92 +4752,147 @@ class _ProductManagePageState extends State<ProductManagePage> {
     final specController = TextEditingController(text: product.spec);
     final materialController = TextEditingController(text: product.material);
     final originController = TextEditingController(text: product.origin);
+    String? selectedImageUrl = product.imageUrl;
+
+    // 选择图片
+    Future<void> pickImage() async {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        final base64String = base64Encode(bytes);
+        selectedImageUrl = 'data:image/jpeg;base64,$base64String';
+        setState(() {});
+      }
+    }
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('编辑产品'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: '产品名称',
-                  border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('编辑产品'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 图片预览
+                if (selectedImageUrl != null && selectedImageUrl!.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    height: 150,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: selectedImageUrl!.startsWith('data:image')
+                          ? Image.memory(
+                              base64Decode(selectedImageUrl!.split(',').last),
+                              fit: BoxFit.cover,
+                            )
+                          : Image.network(
+                              selectedImageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(
+                                  Icons.broken_image,
+                                  size: 50,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                ElevatedButton.icon(
+                  onPressed: pickImage,
+                  icon: const Icon(Icons.image),
+                  label: const Text('选择产品图片'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: priceController,
-                decoration: const InputDecoration(
-                  labelText: '价格',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: '产品名称',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: brandController,
-                decoration: const InputDecoration(
-                  labelText: '品牌',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(
+                    labelText: '价格',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: specController,
-                decoration: const InputDecoration(
-                  labelText: '规格',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: brandController,
+                  decoration: const InputDecoration(
+                    labelText: '品牌',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: materialController,
-                decoration: const InputDecoration(
-                  labelText: '材质',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: specController,
+                  decoration: const InputDecoration(
+                    labelText: '规格',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: originController,
-                decoration: const InputDecoration(
-                  labelText: '产地',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: materialController,
+                  decoration: const InputDecoration(
+                    labelText: '材质',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: originController,
+                  decoration: const InputDecoration(
+                    labelText: '产地',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                DataManager().updateProduct(
+                  Product(
+                    id: product.id,
+                    categoryId: product.categoryId,
+                    name: nameController.text,
+                    price: int.tryParse(priceController.text) ?? product.price,
+                    brand: brandController.text,
+                    spec: specController.text,
+                    material: materialController.text,
+                    origin: originController.text,
+                    stock: product.stock,
+                    imageUrl: selectedImageUrl,
+                  ),
+                );
+                Navigator.pop(context);
+                setState(() {});
+              },
+              child: const Text('保存'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              DataManager().updateProduct(
-                Product(
-                  id: product.id,
-                  categoryId: product.categoryId,
-                  name: nameController.text,
-                  price: int.tryParse(priceController.text) ?? product.price,
-                  brand: brandController.text,
-                  spec: specController.text,
-                  material: materialController.text,
-                  origin: originController.text,
-                  stock: product.stock,
-                ),
-              );
-              Navigator.pop(context);
-              setState(() {});
-            },
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
   }
@@ -3652,9 +5168,9 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
       final spec = product.spec.toLowerCase();
       // 模糊匹配：只要任何字段包含查询字符串就匹配
       return name.contains(queryLower) ||
-             brand.contains(queryLower) ||
-             spec.contains(queryLower) ||
-             product.id.contains(widget.query);
+          brand.contains(queryLower) ||
+          spec.contains(queryLower) ||
+          product.id.contains(widget.query);
     }).toList();
   }
 
@@ -3674,7 +5190,10 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                 children: [
                   Icon(Icons.search_off, size: 80, color: Colors.grey),
                   SizedBox(height: 16),
-                  Text('未找到相关产品', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  Text(
+                    '未找到相关产品',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
                 ],
               ),
             )
@@ -3708,22 +5227,77 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                                 top: Radius.circular(8),
                               ),
                             ),
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.image,
-                                    size: 50,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    product.name,
-                                    style: TextStyle(color: Colors.grey.shade600),
-                                  ),
-                                ],
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8),
                               ),
+                              child:
+                                  product.imageUrl != null &&
+                                      product.imageUrl!.isNotEmpty
+                                  ? product.imageUrl!.startsWith('data:image')
+                                        ? Image.memory(
+                                            base64Decode(
+                                              product.imageUrl!.split(',').last,
+                                            ),
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.network(
+                                            product.imageUrl!,
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                Center(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.image,
+                                                        size: 50,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade500,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        product.name,
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .grey
+                                                              .shade600,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                          )
+                                  : Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.image,
+                                            size: 50,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            product.name,
+                                            style: TextStyle(
+                                              color: Colors.grey.shade600,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -3733,7 +5307,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                product.brand,
+                                product.name,
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -3749,7 +5323,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                               ),
                               const SizedBox(height: 8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     '¥${product.price}',
@@ -3765,16 +5340,26 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                                       color: Colors.blue,
                                     ),
                                     onPressed: () {
-                                      final category = DataManager().getCategoryById(product.categoryId);
-                                      DataManager().addToCart(CartItem(
-                                        categoryId: product.categoryId,
-                                        categoryName: category?.name ?? '未知分类',
-                                        productName: product.name,
-                                        price: product.price,
-                                        brand: product.brand,
-                                      ));
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('已添加${product.name}到购物车')),
+                                      final category = DataManager()
+                                          .getCategoryById(product.categoryId);
+                                      DataManager().addToCart(
+                                        CartItem(
+                                          categoryId: product.categoryId,
+                                          categoryName:
+                                              category?.name ?? '未知分类',
+                                          productName: product.name,
+                                          price: product.price,
+                                          brand: product.brand,
+                                        ),
+                                      );
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '已添加${product.name}到购物车',
+                                          ),
+                                        ),
                                       );
                                     },
                                   ),
@@ -3789,6 +5374,207 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                 },
               ),
             ),
+    );
+  }
+}
+
+// ==================== 会员中心页面 ====================
+
+class MemberCenterPage extends StatelessWidget {
+  const MemberCenterPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = DataManager().currentUser;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('会员中心'),
+        backgroundColor: Colors.blue.shade700,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: user == null
+          ? const Center(child: Text('请先登录'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // 用户信息卡片
+                  Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade400, Colors.blue.shade700],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          const CircleAvatar(
+                            radius: 40,
+                            backgroundColor: Colors.white,
+                            child: Icon(
+                              Icons.person,
+                              size: 50,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            user.username,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              user.isSuperAdmin
+                                  ? '超级管理员'
+                                  : user.isAdmin
+                                  ? '管理员'
+                                  : '普通会员',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // 功能列表
+                  _buildFunctionCard(
+                    context,
+                    '我的订单',
+                    Icons.receipt_long,
+                    Colors.blue,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const OrderHistoryPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildFunctionCard(
+                    context,
+                    '购物车',
+                    Icons.shopping_cart,
+                    Colors.green,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CartPage()),
+                      );
+                    },
+                  ),
+                  _buildFunctionCard(
+                    context,
+                    '我的收藏',
+                    Icons.favorite,
+                    Colors.red,
+                    () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('收藏功能开发中...')),
+                      );
+                    },
+                  ),
+                  _buildFunctionCard(
+                    context,
+                    '地址管理',
+                    Icons.location_on,
+                    Colors.orange,
+                    () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('地址管理功能开发中...')),
+                      );
+                    },
+                  ),
+                  if (user.isAdmin || user.isSuperAdmin)
+                    _buildFunctionCard(
+                      context,
+                      '管理后台',
+                      Icons.admin_panel_settings,
+                      Colors.purple,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AdminDashboardPage(),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildFunctionCard(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
