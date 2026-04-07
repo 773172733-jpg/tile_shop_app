@@ -2136,8 +2136,12 @@ class _ProductListPageState extends State<ProductListPage> {
         ),
         backgroundColor: Colors.blue.shade700,
       ),
+      endDrawer: Drawer(
+        elevation: 10,
+        child: CartDrawer(),
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showCartDialog(context, setState),
+        onPressed: () => Scaffold.of(context).openEndDrawer(),
         backgroundColor: Colors.red,
         icon: const Icon(Icons.shopping_cart, color: Colors.white),
         label: Text(
@@ -2344,9 +2348,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ],
       ),
+      endDrawer: Drawer(
+        elevation: 10,
+        child: CartDrawer(),
+      ),
       floatingActionButton: DataManager().cartItems.isNotEmpty
           ? FloatingActionButton.extended(
-              onPressed: () => showCartDialog(context, setState),
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
               backgroundColor: Colors.red,
               icon: const Icon(Icons.shopping_cart, color: Colors.white),
               label: Text(
