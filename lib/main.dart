@@ -742,6 +742,10 @@ class _HomePageState extends State<HomePage> {
       },
       child: Scaffold(
         key: globalScaffoldKey,
+        endDrawer: Drawer(
+          elevation: 10,
+          child: CartDrawer(),
+        ),
         body: _HomeContent(key: _homeContentKey),
       ),
     );
@@ -1487,11 +1491,6 @@ class _HomeContentState extends State<_HomeContent> {
               ),
             ),
           ],
-        ),
-        floatingActionButton: _buildCartButton(context),
-        endDrawer: Drawer(
-          elevation: 10,
-          child: CartDrawer(onCartChanged: () => setState(() {})),
         ),
       ),
     );
