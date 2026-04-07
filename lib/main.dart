@@ -746,7 +746,23 @@ class _HomePageState extends State<HomePage> {
           elevation: 10,
           child: CartDrawer(),
         ),
+        floatingActionButton: _buildCartButton(),
         body: _HomeContent(key: _homeContentKey),
+      ),
+    );
+  }
+
+  Widget _buildCartButton() {
+    return FloatingActionButton.extended(
+      onPressed: () => _HomeContentState.openCartDrawer(),
+      backgroundColor: Colors.red,
+      icon: const Icon(Icons.shopping_cart, color: Colors.white),
+      label: Text(
+        '${DataManager().totalCount} 件',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -1491,21 +1507,6 @@ class _HomeContentState extends State<_HomeContent> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCartButton(BuildContext context) {
-    return FloatingActionButton.extended(
-      onPressed: () => showCartDialog(context, setState),
-      backgroundColor: Colors.red,
-      icon: const Icon(Icons.shopping_cart, color: Colors.white),
-      label: Text(
-        '${DataManager().totalCount}件',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );
