@@ -2115,6 +2115,7 @@ class ProductListPage extends StatefulWidget {
 }
 
 class _ProductListPageState extends State<ProductListPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _version = 0;
   void _refresh() => setState(() => _version++);
 
@@ -2123,6 +2124,7 @@ class _ProductListPageState extends State<ProductListPage> {
     final products = DataManager().getProductsByCategory(widget.categoryId);
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2141,7 +2143,7 @@ class _ProductListPageState extends State<ProductListPage> {
         child: CartDrawer(),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Scaffold.of(context).openEndDrawer(),
+        onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
         backgroundColor: Colors.red,
         icon: const Icon(Icons.shopping_cart, color: Colors.white),
         label: Text(
@@ -2335,9 +2337,12 @@ class ProductDetailPage extends StatefulWidget {
 }
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text(widget.product.name),
         backgroundColor: Colors.blue.shade700,
@@ -2354,7 +2359,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
       floatingActionButton: DataManager().cartItems.isNotEmpty
           ? FloatingActionButton.extended(
-              onPressed: () => Scaffold.of(context).openEndDrawer(),
+              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
               backgroundColor: Colors.red,
               icon: const Icon(Icons.shopping_cart, color: Colors.white),
               label: Text(
