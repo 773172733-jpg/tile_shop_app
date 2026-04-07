@@ -693,26 +693,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
-  static _HomePageState? _instance;
   bool _isLoading = true;
   final GlobalKey<_HomeContentState> _homeContentKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    _instance = this;
     _initData();
   }
 
   @override
   void dispose() {
-    _instance = null;
     super.dispose();
-  }
-
-  static void openCartDrawer() {
-    _instance?._scaffoldKey.currentState?.openEndDrawer();
   }
 
   Future<void> _initData() async {
@@ -737,7 +729,6 @@ class _HomePageState extends State<HomePage> {
         return false;
       },
       child: Scaffold(
-        key: _scaffoldKey,
         body: _HomeContent(key: _homeContentKey),
       ),
     );
@@ -752,6 +743,8 @@ class _HomeContent extends StatefulWidget {
 }
 
 class _HomeContentState extends State<_HomeContent> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  static _HomeContentState? _instance;
   final _searchController = TextEditingController();
   List<String> _searchSuggestions = [];
   bool _showSuggestions = false;
@@ -759,6 +752,24 @@ class _HomeContentState extends State<_HomeContent> {
   // 用于刷新
   int _version = 0;
   void refresh() => setState(() => _version++);
+
+  @override
+  void initState() {
+    super.initState();
+    _instance = this;
+  }
+
+  @override
+  void dispose() {
+    _instance = null;
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // 打开购物车侧边栏
+  static void openCartDrawer() {
+    _instance?._scaffoldKey.currentState?.openEndDrawer();
+  }
 
   @override
   void didChangeDependencies() {
@@ -793,12 +804,6 @@ class _HomeContentState extends State<_HomeContent> {
     Colors.indigo,
     Colors.lime,
   ];
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   // 选择登录类型对话框
   // 选择登录类型对话框
@@ -1200,6 +1205,7 @@ class _HomeContentState extends State<_HomeContent> {
         return false;
       },
       child: Scaffold(
+        key: _scaffoldKey,
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
@@ -2935,7 +2941,7 @@ class _CartDrawerState extends State<CartDrawer> {
 
 // 显示购物车侧边栏的辅助函数
 void showCartDialog(BuildContext context, [StateSetter? refreshParent]) {
-  _HomePageState.openCartDrawer();
+  _HomeContentState.openCartDrawer();
 }
 
 // ==================== 订单历史页面 ====================
