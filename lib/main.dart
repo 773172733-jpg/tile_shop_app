@@ -160,6 +160,7 @@ class CartItem {
   final int price;
   int quantity;
   String? brand;
+  String? imageUrl;
 
   CartItem({
     required this.categoryId,
@@ -168,6 +169,7 @@ class CartItem {
     required this.price,
     this.quantity = 1,
     this.brand,
+    this.imageUrl,
   });
 
   Map<String, dynamic> toJson() => {
@@ -177,6 +179,7 @@ class CartItem {
     'price': price,
     'quantity': quantity,
     'brand': brand ?? '',
+    'imageUrl': imageUrl ?? '',
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -186,6 +189,7 @@ class CartItem {
     price: json['price'] ?? 0,
     quantity: json['quantity'] ?? 1,
     brand: json['brand'],
+    imageUrl: json['imageUrl'],
   );
 }
 
@@ -2248,6 +2252,7 @@ class _ProductListPageState extends State<ProductListPage> {
                                     productName: product.name,
                                     price: product.price,
                                     brand: product.brand,
+                                    imageUrl: product.imageUrl,
                                   ),
                                   onCartChanged: () => setState(() {}),
                                 );
@@ -2498,6 +2503,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       productName: widget.product.name,
                       price: widget.product.price,
                       brand: widget.product.brand,
+                      imageUrl: widget.product.imageUrl,
                     ),
                     onCartChanged: () => setState(() {}),
                   );
@@ -2528,6 +2534,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       productName: widget.product.name,
                       price: widget.product.price,
                       brand: widget.product.brand,
+                      imageUrl: widget.product.imageUrl,
                     ),
                     onCartChanged: () => setState(() {}),
                   );
@@ -2805,7 +2812,7 @@ class _CartDrawerState extends State<CartDrawer> {
                 : ListView.builder(
                     itemCount: DataManager().cartItems.length,
                     itemBuilder: (_, index) {
-                      final item = DataManager().cartItems[index];
+                      final item = DataManager ().cartItems[index];
                       return Card(
                         margin: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -2816,8 +2823,30 @@ class _CartDrawerState extends State<CartDrawer> {
                           leading: Container(
                             width: 50,
                             height: 50,
-                            color: Colors.grey.shade300,
-                            child: const Icon(Icons.image, color: Colors.grey),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: item.imageUrl!.startsWith('data:image')
+                                        ? Image.memory(
+                                            base64Decode(item.imageUrl!.split(',').last),
+                                            width: 50,
+                                            height: 50,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Image.network(
+                                            item.imageUrl!,
+                                            width: 50,
+                                            height: 50,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(Icons.image, color: Colors.grey),
+                                          ),
+                                  )
+                                : const Icon(Icons.image, color: Colors.grey),
                           ),
                           title: Text(
                             item.productName,
