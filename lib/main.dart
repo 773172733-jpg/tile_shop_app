@@ -232,6 +232,9 @@ class DataManager {
   factory DataManager() => _instance;
   DataManager._internal();
 
+  // 全局购物车变化监听器
+  VoidCallback? onCartChanged;
+
   final List<User> _users = [];
   final List<Category> _categories = [];
   final List<Product> _products = [];
@@ -586,6 +589,8 @@ class DataManager {
     _saveCart();
     // 通知 UI 刷新
     onCartChanged?.call();
+    // 通知全局监听器
+    this.onCartChanged?.call();
   }
 
   void removeFromCart(int index) {
@@ -685,6 +690,9 @@ class DataManager {
 
 // ==================== 首页 ====================
 
+// 全局 Scaffold key 用于打开购物车侧边栏
+final GlobalKey<ScaffoldState> globalScaffoldKey = GlobalKey<ScaffoldState>();
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -699,6 +707,10 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // 注册购物车变化监听器
+    DataManager().onCartChanged = () {
+      if (mounted) setState(() {});
+    };
     _initData();
   }
 
@@ -729,6 +741,7 @@ class _HomePageState extends State<HomePage> {
         return false;
       },
       child: Scaffold(
+        key: globalScaffoldKey,
         body: _HomeContent(key: _homeContentKey),
       ),
     );
@@ -743,7 +756,6 @@ class _HomeContent extends StatefulWidget {
 }
 
 class _HomeContentState extends State<_HomeContent> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
   static _HomeContentState? _instance;
   final _searchController = TextEditingController();
   List<String> _searchSuggestions = [];
@@ -768,7 +780,7 @@ class _HomeContentState extends State<_HomeContent> {
 
   // 打开购物车侧边栏
   static void openCartDrawer() {
-    _instance?._scaffoldKey.currentState?.openEndDrawer();
+    globalScaffoldKey.currentState?.openEndDrawer();
   }
 
   @override
@@ -1205,7 +1217,6 @@ class _HomeContentState extends State<_HomeContent> {
         return false;
       },
       child: Scaffold(
-        key: _scaffoldKey,
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
