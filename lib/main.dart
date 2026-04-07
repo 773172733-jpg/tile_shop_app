@@ -693,13 +693,26 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  static _HomePageState? _instance;
   bool _isLoading = true;
   final GlobalKey<_HomeContentState> _homeContentKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    _instance = this;
     _initData();
+  }
+
+  @override
+  void dispose() {
+    _instance = null;
+    super.dispose();
+  }
+
+  static void openCartDrawer() {
+    _instance?._scaffoldKey.currentState?.openEndDrawer();
   }
 
   Future<void> _initData() async {
@@ -723,7 +736,10 @@ class _HomePageState extends State<HomePage> {
       onWillPop: () async {
         return false;
       },
-      child: Scaffold(body: _HomeContent(key: _homeContentKey)),
+      child: Scaffold(
+        key: _scaffoldKey,
+        body: _HomeContent(key: _homeContentKey),
+      ),
     );
   }
 }
@@ -2333,11 +2349,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               width: double.infinity,
               height: 300,
               color: Colors.grey.shade300,
-              child: widget.product.imageUrl != null && widget.product.imageUrl!.isNotEmpty
+              child:
+                  widget.product.imageUrl != null &&
+                      widget.product.imageUrl!.isNotEmpty
                   ? ClipRRect(
                       child: widget.product.imageUrl!.startsWith('data:image')
                           ? Image.memory(
-                              base64Decode(widget.product.imageUrl!.split(',').last),
+                              base64Decode(
+                                widget.product.imageUrl!.split(',').last,
+                              ),
                               width: double.infinity,
                               height: double.infinity,
                               fit: BoxFit.cover,
@@ -2451,12 +2471,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                     onCartChanged: () => setState(() {}),
                   );
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(
-                    content: Text('已添加'),
-                    duration: Duration(milliseconds: 800),
-                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已添加'),
+                      duration: Duration(milliseconds: 800),
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.add_shopping_cart),
                 label: const Text('加入购物车'),
@@ -2767,10 +2787,7 @@ class _CartDrawerState extends State<CartDrawer> {
                             width: 50,
                             height: 50,
                             color: Colors.grey.shade300,
-                            child: const Icon(
-                              Icons.image,
-                              color: Colors.grey,
-                            ),
+                            child: const Icon(Icons.image, color: Colors.grey),
                           ),
                           title: Text(
                             item.productName,
@@ -2918,9 +2935,7 @@ class _CartDrawerState extends State<CartDrawer> {
 
 // 显示购物车侧边栏的辅助函数
 void showCartDialog(BuildContext context, [StateSetter? refreshParent]) {
-  if (Scaffold.of(context).hasEndDrawer) {
-    Scaffold.of(context).openEndDrawer();
-  }
+  _HomePageState.openCartDrawer();
 }
 
 // ==================== 订单历史页面 ====================
